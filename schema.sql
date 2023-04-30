@@ -65,7 +65,7 @@ CREATE TABLE IF NOT EXISTS rng_seeds_processed (
     structure_z INTEGER  NOT NULL,
 
     CHECK(rng_seed >= 0 AND rng_seed < (1 << 48)),
-    CHECK(steps_back >= 0 AND steps_back <= 2742200), -- TODO: unlikely but end could be bigger
+    CHECK(steps_back >= 0 AND (world_id != 0 OR steps_back <= 2742200)), -- the upper bound may be different for other seeds so only check 2b2t overworld
     CHECK(structure_x >= (-23440 * 4) AND structure_x <= (23440 * 4)),
     CHECK(structure_z >= (-23440 * 4) AND structure_z <= (23440 * 4))
 );

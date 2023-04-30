@@ -1,13 +1,17 @@
 package net.futureclient.randar;
 
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import org.apache.commons.dbcp2.BasicDataSource;
 
 import java.sql.*;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
 public class Database {
-    private static final BasicDataSource POOL = connect();
+    public static final BasicDataSource POOL = connect();
 
     private static BasicDataSource connect() {
         for (int i = 0; i < 60; i++) {
@@ -54,5 +58,38 @@ public class Database {
         }
         System.out.println("Connected.");
         return Optional.of(POOL);
+    }
+
+    public static class Event {
+        public final long id;
+        public final JsonObject json;
+
+        public Event(long id, JsonObject json) {
+            this.id = id;
+            this.json = json;
+        }
+    }
+
+    public static List<Event> queryNewEvents(Connection con) throws SQLException {
+        List<Event> out = new ArrayList<>();
+        try (PreparedStatement statement = con.prepareStatement("SELECT id,event FROM events WHERE id > (SELECT id FROM event_progress)")) {
+            try (ResultSet rs = statement.executeQuery()) {
+                while (rs.next()) {
+                    final long id = rs.getLong(1);
+                    final String json = rs.getString(2);
+                    out.add(new Event(id, JsonParser.parseString(json).getAsJsonObject()));
+                }
+            }
+        }
+
+        return out;
+
+    }
+
+    public static void updateEventProgress(Connection con, long id) throws SQLException {
+        try (PreparedStatement statement = con.prepareStatement("UPDATE event_progress SET id = ?")) {
+            statement.setLong(1, id);
+            statement.execute();
+        }
     }
 }
