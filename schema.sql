@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS worlds -- one table for both servers and dimensions b
 INSERT INTO worlds(hostname, dimension, seed) VALUES ('2b2t.org:25565', 0, -4172144997902289642) ON CONFLICT DO NOTHING; -- 2b2t overworld
 INSERT INTO worlds(hostname, dimension, seed) VALUES ('2b2t.org:25565', 1, 1434823964849314312) ON CONFLICT DO NOTHING; -- 2b2t end/nether
 
+-- queue of seeds we need to reverse
 CREATE TABLE IF NOT EXISTS rng_seeds_not_yet_processed (
     world_id    SMALLINT NOT NULL,
     received_at BIGINT   NOT NULL,
@@ -43,6 +44,7 @@ CREATE TABLE IF NOT EXISTS rng_seeds_not_yet_processed (
         ON UPDATE CASCADE ON DELETE CASCADE
 );
 
+-- every seed ever
 CREATE TABLE IF NOT EXISTS rng_seeds (
     world_id    SMALLINT NOT NULL,
     received_at BIGINT   NOT NULL,
@@ -57,6 +59,7 @@ CREATE TABLE IF NOT EXISTS rng_seeds (
         ON UPDATE CASCADE ON DELETE CASCADE
 );
 
+-- the useful stuff
 CREATE TABLE IF NOT EXISTS rng_seeds_processed (
     rng_seed    BIGINT   NOT NULL PRIMARY KEY,
     steps_back  INTEGER  NOT NULL,

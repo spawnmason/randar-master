@@ -92,4 +92,32 @@ public class Database {
             statement.execute();
         }
     }
+
+    public static void addNewSeed(Connection con, EventSeed event) throws SQLException {
+        // TODO: cache this
+        final int worldId;
+        try (PreparedStatement statement = con.prepareStatement("SELECT id FROM worlds WHERE hostname = ? AND dimension = ?")) {
+            statement.setString(1, event.server);
+            statement.setShort(2, event.dimension);
+            statement.execute();
+            try (ResultSet rs = statement.executeQuery()) {
+                if (!rs.next()) {
+                    throw new SQLException("No existing world id for hostname=" + event.server + " and dimension=" + event.dimension);
+                }
+                worldId = rs.getInt(1);
+            }
+        }
+        try (PreparedStatement statement = con.prepareStatement("INSERT INTO rng_seeds VALUES(?, ?, ?)")) {
+            statement.setLong(1, worldId);
+            statement.setLong(2, event.timestamp);
+            statement.setLong(3, event.seed);
+            statement.execute();
+        }
+        try (PreparedStatement statement = con.prepareStatement("INSERT INTO rng_seeds_not_yet_processed VALUES(?, ?, ?)")) {
+            statement.setLong(1, worldId);
+            statement.setLong(2, event.timestamp);
+            statement.setLong(3, event.seed);
+            statement.execute();
+        }
+    }
 }
