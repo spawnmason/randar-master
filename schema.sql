@@ -2,8 +2,17 @@ CREATE TABLE IF NOT EXISTS events (
     id    BIGSERIAL PRIMARY KEY,
     event JSONB     NOT NULL,
 
-    CHECK(event ? 'type')
+    CHECK(event ? 'type'),
+    CHECK(id > 0)
 );
+
+CREATE TABLE event_progress (
+    id_must_be_zero INTEGER PRIMARY KEY,
+    id BIGINT, -- the id of the last event we processed, so we must query > event_progress.id to get the newest events
+
+    CHECK(id_must_be_zero == 0)
+);
+INSERT INTO event_progress VALUES(0, 0) ON CONFLICT DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS worlds -- one table for both servers and dimensions because of seed being different in overworld vs nether
 (
@@ -18,7 +27,7 @@ CREATE TABLE IF NOT EXISTS worlds -- one table for both servers and dimensions b
     CHECK(hostname LIKE '%.%:%') -- enforce port number must be present
 );
 INSERT INTO worlds(hostname, dimension, seed) VALUES ('2b2t.org:25565', 0, -4172144997902289642) ON CONFLICT DO NOTHING; -- 2b2t overworld
-INSERT INTO worlds(hostname, dimension, seed) VALUES ('2b2t.org:25565', 1, 146008555100680) ON CONFLICT DO NOTHING; -- 2b2t end/nether
+INSERT INTO worlds(hostname, dimension, seed) VALUES ('2b2t.org:25565', 1, 1434823964849314312) ON CONFLICT DO NOTHING; -- 2b2t end/nether
 
 CREATE TABLE IF NOT EXISTS rng_seeds_not_yet_processed (
     world_id    SMALLINT NOT NULL,
