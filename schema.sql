@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS worlds -- one table for both servers and dimensions b
 
     FOREIGN KEY (server_id) REFERENCES servers (id)
         ON UPDATE CASCADE ON DELETE CASCADE
+    -- TODO add a check that worlds.id=0 means the server is 2b2t overworld, to back up the CHECK on world_id=0 in rng_seeds_processed
 );
 
 INSERT INTO servers(hostname) VALUES('2b2t.org:25565');
@@ -56,33 +57,24 @@ CREATE TABLE IF NOT EXISTS rng_seeds_not_yet_processed (
         ON UPDATE CASCADE ON DELETE CASCADE
 );
 
--- every seed ever
-CREATE TABLE IF NOT EXISTS rng_seeds (
+CREATE TABLE IF NOT EXISTS rng_seeds_processed (
     world_id    SMALLINT NOT NULL,
     received_at BIGINT   NOT NULL,
     rng_seed    BIGINT   NOT NULL,
+    steps_back  INTEGER  NOT NULL,
+    woodland_x  INTEGER  NOT NULL,
+    woodland_z  INTEGER  NOT NULL,
 
     UNIQUE(world_id, received_at, rng_seed),
 
     CHECK(received_at > 0),
-    CHECK(rng_seed >= 0 AND rng_seed < (1 << 48)),
+    CHECK(rng_seed >= 0 AND rng_seed < (1::bigint << 48)),
+    CHECK(steps_back >= 0 AND (world_id != 0 OR steps_back <= 2742200)), -- the upper bound may be different for other seeds so only check 2b2t overworld
+    CHECK(woodland_x >= -23440 AND woodland_x <= 23440), -- maybe end gets its own table
+    CHECK(woodland_z >= -23440 AND woodland_z <= 23440),
 
     FOREIGN KEY (world_id) REFERENCES worlds (id)
-        ON UPDATE CASCADE ON DELETE CASCADE
-);
-
--- the useful stuff, overworld only
-CREATE TABLE IF NOT EXISTS rng_seeds_processed (
-    rng_seed    BIGINT   NOT NULL PRIMARY KEY,
-    steps_back  INTEGER  NOT NULL,
-    world_id    SMALLINT NOT NULL,
-    woodland_x  INTEGER  NOT NULL,
-    woodland_z  INTEGER  NOT NULL,
-
-    CHECK(rng_seed >= 0 AND rng_seed < (1 << 48)),
-    CHECK(steps_back >= 0 AND (world_id != 0 OR steps_back <= 2742200)), -- the upper bound may be different for other seeds so only check 2b2t overworld
-    CHECK(woodland_x >= -23440 AND woodland_x <= 23440),
-    CHECK(woodland_z >= -23440 AND woodland_z <= 23440)
+    ON UPDATE CASCADE ON DELETE CASCADE
 );
 
 CREATE TABLE players
@@ -111,14 +103,7 @@ CREATE TABLE player_sessions
                   END
               ) STORED,
 
-    -- there USED to be a really based
-
-    -- EXCLUDE USING GiST (server_id WITH =, player_id WITH =, range WITH &&),
-
-    -- right here, but sadly it takes WAY TOO LONG to generate and keep up to date
-    -- talking over an hour to recreate it after I dropped it :(
-    -- also the server guarantees this anyway so
-    -- also it took multiple gigabytes of disk
+    EXCLUDE USING GiST (server_id WITH =, player_id WITH =, range WITH &&),
 
     FOREIGN KEY (player_id) REFERENCES players (id)
         ON UPDATE CASCADE ON DELETE CASCADE,
