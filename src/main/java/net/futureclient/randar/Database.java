@@ -2,13 +2,11 @@ package net.futureclient.randar;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import it.unimi.dsi.fastutil.objects.Object2ShortMap;
 import org.apache.commons.dbcp2.BasicDataSource;
 
 import java.sql.*;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Objects;
-import java.util.Optional;
+import java.util.*;
 
 public class Database {
     public static final BasicDataSource POOL = connect();
@@ -83,7 +81,6 @@ public class Database {
         }
 
         return out;
-
     }
 
     public static void updateEventProgress(Connection con, long id) throws SQLException {
@@ -93,30 +90,33 @@ public class Database {
         }
     }
 
-    public static void addNewSeed(Connection con, EventSeed event) throws SQLException {
-        // TODO: cache this
-        final int worldId;
-        try (PreparedStatement statement = con.prepareStatement("SELECT id FROM worlds WHERE hostname = ? AND dimension = ?")) {
-            statement.setString(1, event.server);
-            statement.setShort(2, event.dimension);
+    public static OptionalInt getServerId(Connection con, String name) throws SQLException {
+        try (PreparedStatement statement = con.prepareStatement("SELECT id FROM servers WHERE name = ?")) {
+            statement.setString(1, name);
             statement.execute();
             try (ResultSet rs = statement.executeQuery()) {
                 if (!rs.next()) {
-                    throw new SQLException("No existing world id for hostname=" + event.server + " and dimension=" + event.dimension);
+                    return OptionalInt.empty();
                 }
-                worldId = rs.getInt(1);
+                return OptionalInt.of(rs.getShort(1));
             }
         }
-        try (PreparedStatement statement = con.prepareStatement("INSERT INTO rng_seeds VALUES(?, ?, ?)")) {
-            statement.setLong(1, worldId);
-            statement.setLong(2, event.timestamp);
-            statement.setLong(3, event.seed);
-            statement.execute();
+    }
+
+    public static void addNewSeed(Connection con, EventSeed event, Object2ShortMap<String> serverIdCache) throws SQLException {
+        short serverId = serverIdCache.getOrDefault(event.server, (short) -1);
+        if (serverId == -1) {
+            serverId = (short) getServerId(con, event.server).orElse(-1);
         }
-        try (PreparedStatement statement = con.prepareStatement("INSERT INTO rng_seeds_not_yet_processed VALUES(?, ?, ?)")) {
-            statement.setLong(1, worldId);
-            statement.setLong(2, event.timestamp);
-            statement.setLong(3, event.seed);
+        if (serverId == -1) {
+            throw new SQLException("No server id for server \"" + event.server + "\"");
+        }
+
+        try (PreparedStatement statement = con.prepareStatement("INSERT INTO rng_seeds_not_yet_processed VALUES(?, ?, ?, ?)")) {
+            statement.setShort(1, serverId);
+            statement.setLong(2, event.dimension);
+            statement.setLong(3, event.timestamp);
+            statement.setLong(4, event.seed);
             statement.execute();
         }
     }
