@@ -16,15 +16,12 @@ INSERT INTO event_progress VALUES(0, 0) ON CONFLICT DO NOTHING;
 
 CREATE TABLE servers
 (
-    id       SMALLSERIAL PRIMARY KEY,
-    hostname TEXT NOT NULL UNIQUE,
-
-    CHECK(hostname LIKE '%.%:%') -- enforce port number must be present
+    id   SMALLSERIAL PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE
 );
 
 CREATE TABLE IF NOT EXISTS worlds -- one table for both servers and dimensions because of seed being different in overworld vs nether
 (
-    id        SMALLSERIAL PRIMARY KEY,
     server_id SMALLINT    NOT NULL,
     dimension SMALLINT    NOT NULL,
     seed      BIGINT      NOT NULL,
@@ -38,43 +35,38 @@ CREATE TABLE IF NOT EXISTS worlds -- one table for both servers and dimensions b
     -- TODO add a check that worlds.id=0 means the server is 2b2t overworld, to back up the CHECK on world_id=0 in rng_seeds_processed
 );
 
-INSERT INTO servers(hostname) VALUES('2b2t.org:25565');
+INSERT INTO servers(name) VALUES('2b2t.org');
 INSERT INTO worlds(server_id, dimension, seed) VALUES (0, 0, -4172144997902289642) ON CONFLICT DO NOTHING; -- 2b2t overworld
 INSERT INTO worlds(server_id, dimension, seed) VALUES (0, 1, 1434823964849314312) ON CONFLICT DO NOTHING; -- 2b2t end/nether
 
--- queue of seeds we need to reverse
-CREATE TABLE IF NOT EXISTS rng_seeds_not_yet_processed (
-    world_id    SMALLINT NOT NULL,
+CREATE TABLE IF NOT EXISTS rng_seeds_not_yet_processed ( -- queue of seeds we need to reverse
+    server_id   SMALLINT NOT NULL,
+    dimension   SMALLINT NOT NULL,
     received_at BIGINT   NOT NULL,
     rng_seed    BIGINT   NOT NULL,
 
-    UNIQUE(world_id, received_at, rng_seed),
+    UNIQUE(server_id, dimension, received_at, rng_seed),
 
     CHECK(received_at > 0),
-    CHECK(rng_seed >= 0 AND rng_seed < (1 << 48)),
-
-    FOREIGN KEY (world_id) REFERENCES worlds (id)
-        ON UPDATE CASCADE ON DELETE CASCADE
+    CHECK(rng_seed >= 0 AND rng_seed < (1 << 48))
 );
 
-CREATE TABLE IF NOT EXISTS rng_seeds_processed (
-    world_id    SMALLINT NOT NULL,
+CREATE TABLE IF NOT EXISTS rng_seeds (
+    server_id   SMALLINT NOT NULL,
+    dimension   SMALLINT NOT NULL,
     received_at BIGINT   NOT NULL,
     rng_seed    BIGINT   NOT NULL,
     steps_back  INTEGER  NOT NULL,
-    woodland_x  INTEGER  NOT NULL,
-    woodland_z  INTEGER  NOT NULL,
+    structure_x INTEGER  NOT NULL,
+    structure_z INTEGER  NOT NULL,
 
-    UNIQUE(world_id, received_at, rng_seed),
+    UNIQUE(server_id, dimension, received_at, rng_seed),
 
     CHECK(received_at > 0),
     CHECK(rng_seed >= 0 AND rng_seed < (1::bigint << 48)),
-    CHECK(steps_back >= 0 AND (world_id != 0 OR steps_back <= 2742200)), -- the upper bound may be different for other seeds so only check 2b2t overworld
-    CHECK(woodland_x >= -23440 AND woodland_x <= 23440), -- maybe end gets its own table
-    CHECK(woodland_z >= -23440 AND woodland_z <= 23440),
-
-    FOREIGN KEY (world_id) REFERENCES worlds (id)
-    ON UPDATE CASCADE ON DELETE CASCADE
+    CHECK(steps_back >= 0 AND ((server_id != 0 OR dimension != 0) OR steps_back <= 2742200)), -- the upper bound may be different for other seeds so only check 2b2t overworld
+    CHECK(structure_x >= -23440 * (dimension * 3 + 1) AND structure_x <= 23440 * (dimension * 3 + 1)),
+    CHECK(structure_z >= -23440 * (dimension * 3 + 1) AND structure_z <= 23440 * (dimension * 3 + 1))
 );
 
 CREATE TABLE players
@@ -92,14 +84,14 @@ CREATE TABLE player_sessions
 (
     player_id INTEGER  NOT NULL,
     server_id SMALLINT NOT NULL,
-    "join"    BIGINT   NOT NULL,
-    "leave"   BIGINT,
+    enter     BIGINT   NOT NULL,
+    exit      BIGINT,
     range     INT8RANGE GENERATED ALWAYS AS (
                   CASE
-                      WHEN "leave" IS NULL THEN
-                          INT8RANGE("join", ~(1:: BIGINT << 63), '[)')
+                      WHEN exit IS NULL THEN
+                          INT8RANGE(enter, ~(1:: BIGINT << 63), '[)')
                       ELSE
-                          INT8RANGE("join", "leave", '[]')
+                          INT8RANGE(enter, exit, '[]')
                   END
               ) STORED,
 
