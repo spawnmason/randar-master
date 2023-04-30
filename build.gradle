@@ -1,8 +1,9 @@
 plugins {
     id 'java'
+    id 'com.github.johnrengelman.shadow' version '4.0.4'
 }
 
-group = 'net.futureclient'
+group = 'net.futureclient.randar'
 version = '1.0-SNAPSHOT'
 
 repositories {
@@ -10,10 +11,25 @@ repositories {
 }
 
 dependencies {
+    compile 'org.postgresql:postgresql:42.2.27'
+    compile 'org.apache.commons:commons-dbcp2:2.7.0'
+
     testImplementation platform('org.junit:junit-bom:5.9.1')
     testImplementation 'org.junit.jupiter:junit-jupiter'
 }
 
 test {
     useJUnitPlatform()
+}
+
+jar {
+    manifest {
+        attributes(
+            'Main-Class': 'net.futureclient.randar.Main'
+        )
+    }
+}
+
+shadowJar {
+    getArchiveClassifier().set('unoptimised')
 }

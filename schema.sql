@@ -17,8 +17,8 @@ CREATE TABLE IF NOT EXISTS worlds -- one table for both servers and dimensions b
     CHECK(dimension >= 0 AND dimension <= 1),
     CHECK(hostname LIKE '%.%:%') -- enforce port number must be present
 );
-INSERT INTO worlds(hostname, dimension, seed) VALUES ('2b2t.org:25565', 0, -4172144997902289642); -- 2b2t overworld
-INSERT INTO worlds(hostname, dimension, seed) VALUES ('2b2t.org:25565', 1, 146008555100680); -- 2b2t end/nether
+INSERT INTO worlds(hostname, dimension, seed) VALUES ('2b2t.org:25565', 0, -4172144997902289642) ON CONFLICT DO NOTHING; -- 2b2t overworld
+INSERT INTO worlds(hostname, dimension, seed) VALUES ('2b2t.org:25565', 1, 146008555100680) ON CONFLICT DO NOTHING; -- 2b2t end/nether
 
 CREATE TABLE IF NOT EXISTS rng_seeds_not_yet_processed (
     world_id    SMALLINT NOT NULL,
