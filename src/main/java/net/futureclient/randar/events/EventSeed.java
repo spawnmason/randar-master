@@ -1,4 +1,4 @@
-package net.futureclient.randar;
+package net.futureclient.randar.events;
 
 import com.google.gson.JsonObject;
 

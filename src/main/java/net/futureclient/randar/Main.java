@@ -1,6 +1,7 @@
 package net.futureclient.randar;
 
 import it.unimi.dsi.fastutil.objects.Object2ShortArrayMap;
+import net.futureclient.randar.events.EventSeed;
 
 import java.sql.Connection;
 import java.sql.SQLException;

@@ -3,6 +3,7 @@ package net.futureclient.randar;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import it.unimi.dsi.fastutil.objects.Object2ShortMap;
+import net.futureclient.randar.events.EventSeed;
 import org.apache.commons.dbcp2.BasicDataSource;
 
 import java.sql.*;
