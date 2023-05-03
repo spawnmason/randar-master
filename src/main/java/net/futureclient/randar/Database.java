@@ -2,7 +2,12 @@ package net.futureclient.randar;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import it.unimi.dsi.fastutil.ints.IntArrayList;
+import it.unimi.dsi.fastutil.ints.IntList;
+import it.unimi.dsi.fastutil.objects.Object2IntMap;
 import it.unimi.dsi.fastutil.objects.Object2ShortMap;
+import net.futureclient.randar.events.EventHeartbeat;
+import net.futureclient.randar.events.EventPlayerSession;
 import net.futureclient.randar.events.EventSeed;
 import org.apache.commons.dbcp2.BasicDataSource;
 
@@ -91,27 +96,60 @@ public class Database {
         }
     }
 
-    public static OptionalInt getServerId(Connection con, String name) throws SQLException {
-        try (PreparedStatement statement = con.prepareStatement("SELECT id FROM servers WHERE name = ?")) {
+    private static OptionalInt queryId(Connection con, String name, String query) throws SQLException {
+        try (PreparedStatement statement = con.prepareStatement(query)) {
             statement.setString(1, name);
             statement.execute();
             try (ResultSet rs = statement.executeQuery()) {
                 if (!rs.next()) {
                     return OptionalInt.empty();
                 }
-                return OptionalInt.of(rs.getShort(1));
+                return OptionalInt.of(rs.getInt(1));
             }
         }
     }
 
-    public static void addNewSeed(Connection con, EventSeed event, Object2ShortMap<String> serverIdCache) throws SQLException {
-        short serverId = serverIdCache.getOrDefault(event.server, (short) -1);
-        if (serverId == -1) {
-            serverId = (short) getServerId(con, event.server).orElse(-1);
+
+
+    private static OptionalInt getIdByString(Connection con, String name, Object2IntMap<String> cache, String query) throws SQLException {
+        int id = cache.getOrDefault(name, -1);
+        if (id == -1) {
+            id = queryId(con, name, query).orElse(-1);
+            if (id != -1) {
+                cache.put(name, id);
+            }
         }
-        if (serverId == -1) {
-            throw new SQLException("No server id for server \"" + event.server + "\"");
+        if (id == -1) {
+            return OptionalInt.empty();
         }
+        return OptionalInt.of(id);
+    }
+
+    private static short getServerId(Connection con, String server, Object2IntMap<String> cache) throws SQLException {
+        return (short) getIdByString(con, server, cache, "SELECT id FROM servers WHERE name = ?").orElseThrow(() -> new SQLException("No server id matching \"" + server + "\""));
+    }
+
+    private static int insertPlayer(Connection con, String uuid) throws SQLException {
+        try (PreparedStatement statement = con.prepareStatement("INSERT INTO players(uuid, username) VALUES(?, null) RETURNING id")) {
+            statement.setString(1, uuid);
+            try (ResultSet rs = statement.executeQuery()) {
+                if (!rs.next()) throw new IllegalStateException("no id returned from insertPlayer?");
+                return rs.getInt(1);
+            }
+        }
+    }
+    private static int getOrInsertPlayerId(Connection con, String uuid, Object2IntMap<String> cache) throws SQLException {
+        OptionalInt existing = getIdByString(con, uuid, cache, "SELECT id FROM players WHERE uuid = ?");
+        if (existing.isPresent()) {
+            return existing.getAsInt();
+        }
+        int newId = insertPlayer(con, uuid);
+        cache.put(uuid, newId);
+        return newId;
+    }
+
+    public static void addNewSeed(Connection con, EventSeed event, Object2IntMap<String> serverIdCache) throws SQLException {
+        final short serverId = getServerId(con, event.server, serverIdCache);
 
         try (PreparedStatement statement = con.prepareStatement("INSERT INTO rng_seeds_not_yet_processed VALUES(?, ?, ?, ?)")) {
             statement.setShort(1, serverId);
@@ -121,4 +159,36 @@ public class Database {
             statement.execute();
         }
     }
+    public static void onPlayerJoin(Connection con, EventPlayerSession event, Object2IntMap<String> serverIdCache) throws SQLException {
+        final int serverId = getServerId(con, event.server, serverIdCache);
+        final int playerId = getOrInsertPlayerId(con, event.server, serverIdCache);
+        java.sql.Array uuidArray = con.createArrayOf("UUID", event.players); // this might not work
+        java.sql.Array idArray = null;
+        try {
+
+            try (PreparedStatement statement = con.prepareStatement("INSERT INTO players VALUES (?)")) {
+                statement.setArray(1, uuidArray);
+                statement.execute();
+            }
+
+            IntList ids = new IntArrayList();
+            try (PreparedStatement statement = con.prepareStatement("SELECT id FROM players WHERE id IN ?")) {
+                statement.setArray(1, uuidArray);
+
+                try (ResultSet rs = statement.executeQuery()) {
+                    while (rs.next()) {
+                        ids.add(rs.getInt(1));
+                    }
+                }
+            }
+            idArray = con.createArrayOf("INTEGER", ids.toArray());
+            try (PreparedStatement statement = con.prepareStatement("INSERT INTO player_sessions(player_id, server_id, enter, exit) (SELECT id, ?, ?, null FROM (VALUES (?)) AS t(id))")) {
+                statement.execute();
+            }
+        } finally {
+            uuidArray.free();
+            if (idArray != null) idArray.free();
+        }
+    }
+
 }

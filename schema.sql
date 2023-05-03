@@ -48,7 +48,10 @@ CREATE TABLE IF NOT EXISTS rng_seeds_not_yet_processed ( -- queue of seeds we ne
     UNIQUE(server_id, dimension, received_at, rng_seed),
 
     CHECK(received_at > 0),
-    CHECK(rng_seed >= 0 AND rng_seed < (1 << 48))
+    CHECK(rng_seed >= 0 AND rng_seed < (1 << 48)),
+
+    FOREIGN KEY (server_id) REFERENCES servers (id)
+        ON UPDATE CASCADE ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS rng_seeds (
@@ -66,17 +69,21 @@ CREATE TABLE IF NOT EXISTS rng_seeds (
     CHECK(rng_seed >= 0 AND rng_seed < (1::bigint << 48)),
     CHECK(steps_back >= 0 AND ((server_id != 0 OR dimension != 0) OR steps_back <= 2742200)), -- the upper bound may be different for other seeds so only check 2b2t overworld
     CHECK(structure_x >= -23440 * (dimension * 3 + 1) AND structure_x <= 23440 * (dimension * 3 + 1)),
-    CHECK(structure_z >= -23440 * (dimension * 3 + 1) AND structure_z <= 23440 * (dimension * 3 + 1))
+    CHECK(structure_z >= -23440 * (dimension * 3 + 1) AND structure_z <= 23440 * (dimension * 3 + 1)),
+
+    FOREIGN KEY (server_id) REFERENCES servers (id)
+        ON UPDATE CASCADE ON DELETE CASCADE
 );
 
 CREATE TABLE players
 (
     id       SERIAL PRIMARY KEY,
     uuid     UUID NOT NULL UNIQUE,
-    username TEXT
+    username TEXT DEFAULT NULL
 );
 
 CREATE INDEX players_by_username ON players (username);
+
 
 CREATE EXTENSION btree_gist;
 CREATE TABLE player_sessions
@@ -103,3 +110,5 @@ CREATE TABLE player_sessions
 );
 CREATE INDEX player_sessions_range ON player_sessions USING GiST (server_id, range);
 CREATE INDEX player_sessions_by_leave ON player_sessions (server_id, player_id, UPPER(range));
+
+CREATE VIEW online_players AS SELECT * FROM player_sessions WHERE range @> (~(1::bigint << 63) >> 1);
