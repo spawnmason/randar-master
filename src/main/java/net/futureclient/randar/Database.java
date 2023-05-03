@@ -166,7 +166,7 @@ public class Database {
         java.sql.Array idArray = null;
         try {
 
-            try (PreparedStatement statement = con.prepareStatement("INSERT INTO players VALUES (?)")) {
+            try (PreparedStatement statement = con.prepareStatement("INSERT INTO players(uuid) VALUES (?) ON CONFLICT DO NOTHING")) {
                 statement.setArray(1, uuidArray);
                 statement.execute();
             }
