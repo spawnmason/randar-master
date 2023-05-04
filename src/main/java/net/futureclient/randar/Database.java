@@ -179,7 +179,7 @@ public class Database {
     private static void onPlayerLeave0(Connection con, long time, UUID uuid, int serverId, Object2IntMap<String> cache) throws SQLException {
         final int playerId = getOrInsertPlayerId(con, uuid, cache);
 
-        try (PreparedStatement statement = con.prepareStatement("UPDATE online_players SET exit = ? WHERE player_id = ? AND server_id = ?")) {
+        try (PreparedStatement statement = con.prepareStatement("UPDATE player_sessions SET exit = ? WHERE range @> (~(1::bigint << 63) >> 1) AND player_id = ? AND server_id = ?")) {
             statement.setLong(1, time);
             statement.setInt(2, playerId);
             statement.setShort(3, (short) serverId);
