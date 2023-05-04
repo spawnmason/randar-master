@@ -109,8 +109,6 @@ public class Database {
         }
     }
 
-
-
     private static OptionalInt getIdByString(Connection con, String name, Object2IntMap<String> cache, String query) throws SQLException {
         int id = cache.getOrDefault(name, -1);
         if (id == -1) {
@@ -130,7 +128,7 @@ public class Database {
     }
 
     private static int insertPlayer(Connection con, String uuid) throws SQLException {
-        try (PreparedStatement statement = con.prepareStatement("INSERT INTO players(uuid, username) VALUES(?, null) RETURNING id")) {
+        try (PreparedStatement statement = con.prepareStatement("INSERT INTO players(uuid) VALUES(?) RETURNING id")) {
             statement.setString(1, uuid);
             try (ResultSet rs = statement.executeQuery()) {
                 if (!rs.next()) throw new IllegalStateException("no id returned from insertPlayer?");
@@ -138,13 +136,14 @@ public class Database {
             }
         }
     }
-    private static int getOrInsertPlayerId(Connection con, String uuid, Object2IntMap<String> cache) throws SQLException {
-        OptionalInt existing = getIdByString(con, uuid, cache, "SELECT id FROM players WHERE uuid = ?");
+    private static int getOrInsertPlayerId(Connection con, UUID uuid, Object2IntMap<String> cache) throws SQLException {
+        final String uuidString = uuid.toString();
+        OptionalInt existing = getIdByString(con, uuidString, cache, "SELECT id FROM players WHERE uuid = ?");
         if (existing.isPresent()) {
             return existing.getAsInt();
         }
-        int newId = insertPlayer(con, uuid);
-        cache.put(uuid, newId);
+        int newId = insertPlayer(con, uuidString);
+        cache.put(uuidString, newId);
         return newId;
     }
 
@@ -159,35 +158,22 @@ public class Database {
             statement.execute();
         }
     }
-    public static void onPlayerJoin(Connection con, EventPlayerSession event, Object2IntMap<String> serverIdCache) throws SQLException {
+
+    private static void onPlayerJoin0(Connection con, long time, UUID uuid, int serverId, Object2IntMap<String> cache) throws SQLException {
+        final int playerId = getOrInsertPlayerId(con, uuid, cache);
+
+        try (PreparedStatement statement = con.prepareStatement("INSERT INTO player_sessions(player_id, server_id, enter, exit) VALUES (?, ?, ?, null)")) {
+            statement.setInt(1, playerId);
+            statement.setShort(2, (short) serverId);
+            statement.setLong(3, time);
+            statement.execute();
+        }
+
+    }
+    public static void onPlayerJoin(Connection con, EventPlayerSession event, Object2IntMap<String> serverIdCache, Object2IntMap<String> playerIdCache) throws SQLException {
         final int serverId = getServerId(con, event.server, serverIdCache);
-        final int playerId = getOrInsertPlayerId(con, event.server, serverIdCache);
-        java.sql.Array uuidArray = con.createArrayOf("UUID", event.players); // this might not work
-        java.sql.Array idArray = null;
-        try {
-
-            try (PreparedStatement statement = con.prepareStatement("INSERT INTO players(uuid) VALUES (?) ON CONFLICT DO NOTHING")) {
-                statement.setArray(1, uuidArray);
-                statement.execute();
-            }
-
-            IntList ids = new IntArrayList();
-            try (PreparedStatement statement = con.prepareStatement("SELECT id FROM players WHERE id IN ?")) {
-                statement.setArray(1, uuidArray);
-
-                try (ResultSet rs = statement.executeQuery()) {
-                    while (rs.next()) {
-                        ids.add(rs.getInt(1));
-                    }
-                }
-            }
-            idArray = con.createArrayOf("INTEGER", ids.toArray());
-            try (PreparedStatement statement = con.prepareStatement("INSERT INTO player_sessions(player_id, server_id, enter, exit) (SELECT id, ?, ?, null FROM (VALUES (?)) AS t(id))")) {
-                statement.execute();
-            }
-        } finally {
-            uuidArray.free();
-            if (idArray != null) idArray.free();
+        for (UUID uuid : event.players) {
+            onPlayerJoin0(con, event.time, uuid, serverId, playerIdCache);
         }
     }
 

@@ -14,6 +14,7 @@ public class Main {
             con.setAutoCommit(false);
             var events = Database.queryNewEvents(con);
             var serverIdCache = new Object2IntArrayMap<String>();
+            var playerIdCache = new Object2IntArrayMap<String>();
             for (var event : events) {
                 final String type = event.json.get("type").getAsString();
                 switch (type) {
@@ -24,6 +25,7 @@ public class Main {
                         break;
                     case "player_join":
                         final var eventJoin = new EventPlayerSession(event.json);
+                        Database.onPlayerJoin(con, eventJoin, serverIdCache, playerIdCache);
                         break;
                     case "player_leave":
                         final var eventLeave = new EventPlayerSession(event.json);
