@@ -189,7 +189,7 @@ public class Database {
     public static void onPlayerLeave(Connection con, EventPlayerSession event, Object2IntMap<String> serverIdCache, Object2IntMap<String> playerIdCache) throws SQLException {
         final int serverId = getServerId(con, event.server, serverIdCache);
         for (UUID uuid : event.players) {
-            onPlayerJoin0(con, event.time, uuid, serverId, playerIdCache);
+            onPlayerLeave0(con, event.time, uuid, serverId, playerIdCache);
         }
     }
 
