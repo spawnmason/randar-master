@@ -29,6 +29,7 @@ public class Main {
                         break;
                     case "player_leave":
                         final var eventLeave = new EventPlayerSession(event.json);
+                        Database.onPlayerLeave(con, eventLeave, serverIdCache, playerIdCache);
                         break;
                     case "startup":
                         final var eventStart = new EventStartup(event.json);
