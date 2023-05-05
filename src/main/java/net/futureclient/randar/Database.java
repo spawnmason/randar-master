@@ -2,13 +2,10 @@ package net.futureclient.randar;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import it.unimi.dsi.fastutil.ints.IntArrayList;
-import it.unimi.dsi.fastutil.ints.IntList;
 import it.unimi.dsi.fastutil.objects.Object2IntMap;
-import it.unimi.dsi.fastutil.objects.Object2ShortMap;
-import net.futureclient.randar.events.EventHeartbeat;
 import net.futureclient.randar.events.EventPlayerSession;
 import net.futureclient.randar.events.EventSeed;
+import net.futureclient.randar.events.EventStop;
 import org.apache.commons.dbcp2.BasicDataSource;
 
 import java.sql.*;
@@ -190,6 +187,17 @@ public class Database {
         final int serverId = getServerId(con, event.server, serverIdCache);
         for (UUID uuid : event.players) {
             onPlayerLeave0(con, event.time, uuid, serverId, playerIdCache);
+        }
+    }
+
+
+    public static void onStop(Connection con, EventStop event, Object2IntMap<String> serverIdCache) throws SQLException {
+        final int serverId = getServerId(con, event.server, serverIdCache);
+
+        try (PreparedStatement statement = con.prepareStatement("UPDATE online_players SET exit = ? WHERE server_id = ?")) {
+            statement.setLong(1, event.timestamp);
+            statement.setInt(2, serverId);
+            statement.execute();
         }
     }
 

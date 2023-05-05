@@ -1,7 +1,6 @@
 package net.futureclient.randar;
 
 import it.unimi.dsi.fastutil.objects.Object2IntArrayMap;
-import it.unimi.dsi.fastutil.objects.Object2ShortArrayMap;
 import net.futureclient.randar.events.*;
 
 import java.sql.Connection;
@@ -31,14 +30,17 @@ public class Main {
                         final var eventLeave = new EventPlayerSession(event.json);
                         Database.onPlayerLeave(con, eventLeave, serverIdCache, playerIdCache);
                         break;
-                    case "startup":
-                        final var eventStart = new EventStartup(event.json);
+                    case "start":
+                        final var eventStart = new EventStart(event.json);
+                        // TODO: close open sessions using the timestamp of the last heartbeat
                         break;
                     case "stop":
                         final var eventStop = new EventStop(event.json);
+                        Database.onStop(con, eventStop, serverIdCache);
                         break;
                     case "heartbeat":
-                        final var eventHeartbeat = new EventHeartbeat(event.json);
+                        //final var eventHeartbeat = new EventHeartbeat(event.json);
+                        // nothing to be done here
                         break;
                     default:
                         throw new IllegalStateException("Unknown event type:" + type);
