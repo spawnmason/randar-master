@@ -70,7 +70,7 @@ public class Main {
                     int processed;
                     do {
                         processed = processEvents(limit);
-                    } while (processed < limit);
+                    } while (processed >= limit);
                 } catch (SQLException ex) {
                     LOGGER.fatal("Caught SQL exception while processing events", ex);
                     System.exit(1);
