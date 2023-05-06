@@ -2,11 +2,16 @@ package net.futureclient.randar;
 
 import it.unimi.dsi.fastutil.objects.Object2IntArrayMap;
 import net.futureclient.randar.events.*;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.sql.Connection;
 import java.sql.SQLException;
 
 public class Main {
+    private static final Logger LOGGER = LogManager.getLogger("RandarMaster");
+
+    private static Thread eventProcessingThread;
 
     private static void processEvents() throws SQLException {
         try (Connection con = Database.POOL.getConnection()) {
@@ -32,7 +37,7 @@ public class Main {
                         break;
                     case "start":
                         final var eventStart = new EventStart(event.json);
-                        Database.onStart(con, eventStart, serverIdCache);
+                        Database.onStart(con, eventStart, event.id, serverIdCache);
                         break;
                     case "stop":
                         final var eventStop = new EventStop(event.json);
@@ -54,9 +59,20 @@ public class Main {
     }
 
 
-    public static void main(String[] args) throws SQLException {
+    public static void main(String[] args) {
         System.out.println("Hello world!");
         new Database();
+        eventProcessingThread = new Thread(() -> {
+            while (true) {
+                try {
+                    processEvents();
+                } catch (SQLException ex) {
+                    LOGGER.fatal("Caught SQL exception while processing events", ex);
+                    System.exit(1);
+                }
+            }
+        });
+        eventProcessingThread.start();
 
     }
 }
