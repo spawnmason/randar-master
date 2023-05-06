@@ -204,7 +204,8 @@ public class Database {
 
         try (PreparedStatement statement = con.prepareStatement("UPDATE online_players SET exit = (SELECT COALESCE((event->'timestamp')::bigint, ?) FROM events WHERE (event->>'type' = 'seed' AND event->>'server' = $2) OR (event->>'type' = 'heartbeat' AND event->'servers' ?| array[$2]) ORDER BY id DESC LIMIT 1) WHERE server_id = ?")) {
             statement.setLong(1, event.timestamp);
-            statement.setInt(2, serverId);
+            statement.setString(2, event.server);
+            statement.setInt(3, serverId);
             statement.execute();
         }
     }
