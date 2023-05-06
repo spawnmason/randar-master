@@ -13,10 +13,10 @@ public class Main {
 
     private static Thread eventProcessingThread;
 
-    private static void processEvents() throws SQLException {
+    private static int processEvents(int limit) throws SQLException {
         try (Connection con = Database.POOL.getConnection()) {
             con.setAutoCommit(false);
-            var events = Database.queryNewEvents(con);
+            var events = Database.queryNewEvents(con, limit);
             var serverIdCache = new Object2IntArrayMap<String>();
             var playerIdCache = new Object2IntArrayMap<String>();
             for (var event : events) {
@@ -55,6 +55,7 @@ public class Main {
                 Database.updateEventProgress(con, events.get(events.size() - 1).id);
             }
             con.commit();
+            return events.size();
         }
     }
 
@@ -64,12 +65,19 @@ public class Main {
         new Database();
         eventProcessingThread = new Thread(() -> {
             while (true) {
+                final int limit = 10000;
                 try {
-                    processEvents();
+                    int processed;
+                    do {
+                        processed = processEvents(limit);
+                    } while (processed < limit);
                 } catch (SQLException ex) {
                     LOGGER.fatal("Caught SQL exception while processing events", ex);
                     System.exit(1);
                 }
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException ex) { ex.printStackTrace(); }
             }
         });
         eventProcessingThread.start();

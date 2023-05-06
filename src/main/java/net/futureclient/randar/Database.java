@@ -69,9 +69,10 @@ public class Database {
         }
     }
 
-    public static List<Event> queryNewEvents(Connection con) throws SQLException {
+    public static List<Event> queryNewEvents(Connection con, int limit) throws SQLException {
         List<Event> out = new ArrayList<>();
-        try (PreparedStatement statement = con.prepareStatement("SELECT id,event FROM events WHERE id > (SELECT id FROM event_progress)")) {
+        try (PreparedStatement statement = con.prepareStatement("SELECT id,event FROM events WHERE id > (SELECT id FROM event_progress) LIMIT ?")) {
+            statement.setInt(1, limit);
             try (ResultSet rs = statement.executeQuery()) {
                 while (rs.next()) {
                     final long id = rs.getLong(1);
