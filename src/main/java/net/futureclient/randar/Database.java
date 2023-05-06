@@ -3,9 +3,7 @@ package net.futureclient.randar;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import it.unimi.dsi.fastutil.objects.Object2IntMap;
-import net.futureclient.randar.events.EventPlayerSession;
-import net.futureclient.randar.events.EventSeed;
-import net.futureclient.randar.events.EventStop;
+import net.futureclient.randar.events.*;
 import org.apache.commons.dbcp2.BasicDataSource;
 
 import java.sql.*;
@@ -195,6 +193,16 @@ public class Database {
         final int serverId = getServerId(con, event.server, serverIdCache);
 
         try (PreparedStatement statement = con.prepareStatement("UPDATE online_players SET exit = ? WHERE server_id = ?")) {
+            statement.setLong(1, event.timestamp);
+            statement.setInt(2, serverId);
+            statement.execute();
+        }
+    }
+
+    public static void onStart(Connection con, EventStart event, Object2IntMap<String> serverIdCache) throws SQLException {
+        final int serverId = getServerId(con, event.server, serverIdCache);
+
+        try (PreparedStatement statement = con.prepareStatement("UPDATE online_players SET exit = (SELECT COALESCE((event->timestamp)::bigint, ?) FROM events WHERE event->>type = 'heartbeat' ORDER BY id DESC LIMIT 1) WHERE server_id = ?")) {
             statement.setLong(1, event.timestamp);
             statement.setInt(2, serverId);
             statement.execute();

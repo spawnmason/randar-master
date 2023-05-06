@@ -32,7 +32,7 @@ public class Main {
                         break;
                     case "start":
                         final var eventStart = new EventStart(event.json);
-                        // TODO: close open sessions using the timestamp of the last heartbeat
+                        Database.onStart(con, eventStart, serverIdCache);
                         break;
                     case "stop":
                         final var eventStop = new EventStop(event.json);
