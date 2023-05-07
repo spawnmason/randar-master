@@ -14,6 +14,14 @@ CREATE TABLE event_progress (
 );
 INSERT INTO event_progress VALUES(0, 0) ON CONFLICT DO NOTHING;
 
+CREATE TABLE sqlite_backfill_progress (
+    id_must_be_zero INTEGER PRIMARY KEY,
+    last_rowid_processed BIGINT,
+
+    CHECK(id_must_be_zero == 0)
+);
+INSERT INTO sqlite_backfill_progress VALUES(0, 0) ON CONFLICT DO NOTHING;
+
 CREATE TABLE servers
 (
     id   SMALLSERIAL PRIMARY KEY,
