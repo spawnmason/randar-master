@@ -8,9 +8,9 @@ CREATE TABLE IF NOT EXISTS events (
 
 CREATE TABLE IF NOT EXISTS event_progress (
     id_must_be_zero INTEGER PRIMARY KEY,
-    id BIGINT, -- the id of the last event we processed, so we must query > event_progress.id to get the newest events
+    id BIGINT NOT NULL, -- the id of the last event we processed, so we must query > event_progress.id to get the newest events
 
-    CHECK(id_must_be_zero == 0)
+    CHECK(id_must_be_zero = 0)
 );
 INSERT INTO event_progress VALUES(0, 0) ON CONFLICT DO NOTHING;
 
