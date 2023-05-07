@@ -42,8 +42,8 @@ CREATE TABLE IF NOT EXISTS worlds ( -- one table for both servers and dimensions
 );
 
 INSERT INTO servers(name) VALUES('2b2t.org') ON CONFLICT DO NOTHING;
-INSERT INTO worlds(server_id, dimension, seed) VALUES (0, 0, -4172144997902289642) ON CONFLICT DO NOTHING; -- 2b2t overworld
-INSERT INTO worlds(server_id, dimension, seed) VALUES (0, 1, 1434823964849314312) ON CONFLICT DO NOTHING; -- 2b2t end/nether
+INSERT INTO worlds(server_id, dimension, seed) VALUES (1, 0, -4172144997902289642) ON CONFLICT DO NOTHING; -- 2b2t overworld
+INSERT INTO worlds(server_id, dimension, seed) VALUES (1, 1, 1434823964849314312) ON CONFLICT DO NOTHING; -- 2b2t end/nether
 
 CREATE TABLE IF NOT EXISTS rng_seeds_not_yet_processed ( -- queue of seeds we need to reverse
     server_id   SMALLINT NOT NULL,
@@ -124,4 +124,4 @@ CREATE TABLE IF NOT EXISTS player_sessions (
 CREATE INDEX IF NOT EXISTS player_sessions_range ON player_sessions USING GiST (server_id, range);
 CREATE INDEX IF NOT EXISTS player_sessions_by_leave ON player_sessions (server_id, player_id, UPPER(range));
 
-CREATE VIEW IF NOT EXISTS online_players AS SELECT * FROM player_sessions WHERE range @> (~(1::bigint << 63) >> 1);
+CREATE OR REPLACE VIEW online_players AS SELECT * FROM player_sessions WHERE range @> (~(1::bigint << 63) >> 1);
