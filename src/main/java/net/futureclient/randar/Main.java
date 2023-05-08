@@ -8,6 +8,19 @@ import java.sql.SQLException;
 
 public class Main {
     private static Thread eventProcessingThread;
+    private static Thread seedCopyingThread;
+
+    private static int copyNewSeedEvents() throws SQLException {
+        try (Connection con = Database.POOL.getConnection()) {
+            con.setAutoCommit(false);
+
+            final int updates = Database.copyNewSeedEvents(con);
+            Database.updateSeedCopyProgress(con);
+
+            con.commit();
+            return updates;
+        }
+    }
 
     private static int processEvents(int limit) throws SQLException {
         try (Connection con = Database.POOL.getConnection()) {
@@ -74,17 +87,35 @@ public class Main {
                         processed = processEvents(limit);
                         System.out.println("Processed " + processed + " events");
                     } while (processed >= limit);
+
+                    Thread.sleep(5000);
                 } catch (SQLException ex) {
                     System.out.println("Caught SQL exception while processing events");
                     ex.printStackTrace();
                     System.exit(1);
+                } catch (InterruptedException ex) {
+                    return;
                 }
-                try {
-                    Thread.sleep(1000);
-                } catch (InterruptedException ex) { ex.printStackTrace(); }
             }
         });
         eventProcessingThread.start();
+        seedCopyingThread = new Thread(() -> {
+            while (true) {
+                try {
+                    final int copies = copyNewSeedEvents();
+                    System.out.println("Copied " + copies + " seeds from events table");
+
+                    Thread.sleep(5000);
+                } catch (SQLException ex) {
+                    System.out.println("Caught SQL exception from copying seed events");
+                    ex.printStackTrace();
+                    System.exit(1);
+                } catch (InterruptedException ex) {
+                    return;
+                }
+            }
+        });
+        seedCopyingThread.start();
 
     }
 }
