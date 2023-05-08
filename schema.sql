@@ -53,6 +53,7 @@ INSERT INTO worlds(server_id, dimension, seed) VALUES (1, 0, -417214499790228964
 INSERT INTO worlds(server_id, dimension, seed) VALUES (1, 1, 1434823964849314312) ON CONFLICT DO NOTHING; -- 2b2t end/nether
 
 CREATE TABLE IF NOT EXISTS rng_seeds_not_yet_processed ( -- queue of seeds we need to reverse
+    id          BIGSERIAL PRIMARY KEY,
     server_id   SMALLINT NOT NULL,
     dimension   SMALLINT NOT NULL,
     received_at BIGINT   NOT NULL,
