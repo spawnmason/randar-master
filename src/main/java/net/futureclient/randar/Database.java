@@ -2,6 +2,7 @@ package net.futureclient.randar;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import it.unimi.dsi.fastutil.longs.LongArrayList;
 import it.unimi.dsi.fastutil.objects.Object2IntMap;
 import net.futureclient.randar.events.*;
 import org.apache.commons.dbcp2.BasicDataSource;
@@ -230,4 +231,34 @@ public class Database {
         }
     }
 
+    public static Optional<UnprocessedSeeds> getSomeSeedsToReverse(Connection con) throws SQLException {
+        final int LIMIT = 100000;
+        try (PreparedStatement statement = con.prepareStatement("SELECT id,rng_seed FROM rng_seeds_not_yet_processed WHERE dimension = 0 AND server_id = 1 ORDER BY id LIMIT ?")) {
+            statement.setInt(1, LIMIT);
+            var seeds = new LongArrayList(LIMIT);
+            long minId = Long.MAX_VALUE;
+            long maxId = Long.MIN_VALUE;
+            try (ResultSet rs = statement.executeQuery()) {
+                while (rs.next()) {
+                    final long id = rs.getLong(1);
+                    minId = Math.min(id, minId);
+                    maxId = Math.max(id, maxId);
+                    seeds.add(rs.getLong(2));
+                }
+                if (!seeds.isEmpty()) {
+                    return Optional.of(new UnprocessedSeeds(minId, maxId, 0, seeds));
+                } else {
+                    return Optional.empty();
+                }
+            }
+        }
+    }
+
+    public static void deleteUnprocessedSeeds(Connection con, long minId, long maxId) throws SQLException {
+        try (PreparedStatement statement = con.prepareStatement("DELETE FROM rng_seeds_not_yet_processed WHERE id >= ? AND id <= ?")) {
+            statement.setLong(1, minId);
+            statement.setLong(2, maxId);
+            statement.execute();
+        }
+    }
 }
