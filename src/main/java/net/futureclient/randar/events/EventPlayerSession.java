@@ -9,14 +9,16 @@ import java.util.UUID;
 public class EventPlayerSession {
     public final long time;
     public final String server;
-    public final UUID[] players;
+    //public final UUID[] players;
+    public final UUID uuid;
 
     public EventPlayerSession(JsonObject json) {
-        this.time = json.get("time").getAsLong();
+        this.time = json.get("tracker_timestamp").getAsLong();
         this.server = json.get("server").getAsString();
-        this.players = json.get("players").getAsJsonArray().asList().stream()
+        /*this.players = json.get("players").getAsJsonArray().asList().stream()
                 .map(JsonElement::getAsString)
                 .map(UUID::fromString)
-                .toArray(UUID[]::new);
+                .toArray(UUID[]::new);*/
+        this.uuid = UUID.fromString(json.get("uuid").getAsString());
     }
 }

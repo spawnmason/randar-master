@@ -2,21 +2,18 @@ package net.futureclient.randar;
 
 import it.unimi.dsi.fastutil.objects.Object2IntArrayMap;
 import net.futureclient.randar.events.*;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
 import java.sql.Connection;
 import java.sql.SQLException;
 
 public class Main {
-    private static final Logger LOGGER = LogManager.getLogger("RandarMaster");
-
     private static Thread eventProcessingThread;
 
     private static int processEvents(int limit) throws SQLException {
         try (Connection con = Database.POOL.getConnection()) {
             con.setAutoCommit(false);
             var events = Database.queryNewEvents(con, limit);
+            System.out.println("Got " + events.size() + " events");
             var serverIdCache = new Object2IntArrayMap<String>();
             var playerIdCache = new Object2IntArrayMap<String>();
             for (var event : events) {
@@ -47,8 +44,13 @@ public class Main {
                         //final var eventHeartbeat = new EventHeartbeat(event.json);
                         // nothing to be done here
                         break;
+                    case "plugin_startup":
+                        final var eventStartup = new PluginStartupEvent(event.json);
+                        Database.onPluginStart(con, eventStartup, event.id);
+                        break;
                     default:
-                        throw new IllegalStateException("Unknown event type:" + type);
+                        System.out.println("Unknown event type: " + type);
+                        //throw new IllegalStateException("Unknown event type:" + type);
                 }
             }
             if (!events.isEmpty()) {
@@ -65,14 +67,16 @@ public class Main {
         new Database();
         eventProcessingThread = new Thread(() -> {
             while (true) {
-                final int limit = 10000;
+                final int limit = 1000;
                 try {
                     int processed;
                     do {
                         processed = processEvents(limit);
+                        System.out.println("Processed " + processed + " events");
                     } while (processed >= limit);
                 } catch (SQLException ex) {
-                    LOGGER.fatal("Caught SQL exception while processing events", ex);
+                    System.out.println("Caught SQL exception while processing events");
+                    ex.printStackTrace();
                     System.exit(1);
                 }
                 try {

@@ -71,7 +71,8 @@ public class Database {
 
     public static List<Event> queryNewEvents(Connection con, int limit) throws SQLException {
         List<Event> out = new ArrayList<>();
-        try (PreparedStatement statement = con.prepareStatement("SELECT id,event FROM events WHERE id > (SELECT id FROM event_progress) LIMIT ?")) {
+        // should we have an index?
+        try (PreparedStatement statement = con.prepareStatement("SELECT id,event FROM events WHERE id > (SELECT id FROM event_progress) AND event->>'type' NOT IN ('seed', 'attach') ORDER BY id LIMIT ?")) {
             statement.setInt(1, limit);
             try (ResultSet rs = statement.executeQuery()) {
                 while (rs.next()) {
@@ -124,7 +125,7 @@ public class Database {
     }
 
     private static int insertPlayer(Connection con, String uuid) throws SQLException {
-        try (PreparedStatement statement = con.prepareStatement("INSERT INTO players(uuid) VALUES(?) RETURNING id")) {
+        try (PreparedStatement statement = con.prepareStatement("INSERT INTO players(uuid) VALUES(?::UUID) RETURNING id")) {
             statement.setString(1, uuid);
             try (ResultSet rs = statement.executeQuery()) {
                 if (!rs.next()) throw new IllegalStateException("no id returned from insertPlayer?");
@@ -134,7 +135,7 @@ public class Database {
     }
     private static int getOrInsertPlayerId(Connection con, UUID uuid, Object2IntMap<String> cache) throws SQLException {
         final String uuidString = uuid.toString();
-        OptionalInt existing = getIdByString(con, uuidString, cache, "SELECT id FROM players WHERE uuid = ?");
+        OptionalInt existing = getIdByString(con, uuidString, cache, "SELECT id FROM players WHERE uuid = ?::UUID");
         if (existing.isPresent()) {
             return existing.getAsInt();
         }
@@ -146,46 +147,40 @@ public class Database {
     public static void addNewSeed(Connection con, EventSeed event, Object2IntMap<String> serverIdCache) throws SQLException {
         final short serverId = getServerId(con, event.server, serverIdCache);
 
-        try (PreparedStatement statement = con.prepareStatement("INSERT INTO rng_seeds_not_yet_processed VALUES(?, ?, ?, ?)")) {
-            statement.setShort(1, serverId);
-            statement.setLong(2, event.dimension);
-            statement.setLong(3, event.timestamp);
-            statement.setLong(4, event.seed);
-            statement.execute();
+        for (long seed : event.seeds) {
+            try (PreparedStatement statement = con.prepareStatement("INSERT INTO rng_seeds_not_yet_processed VALUES(?, ?, ?, ?)")) {
+                statement.setShort(1, serverId);
+                statement.setLong(2, event.dimension);
+                statement.setLong(3, event.timestamp);
+                statement.setLong(4, seed);
+                statement.execute();
+            }
         }
     }
 
-    private static void onPlayerJoin0(Connection con, long time, UUID uuid, int serverId, Object2IntMap<String> cache) throws SQLException {
-        final int playerId = getOrInsertPlayerId(con, uuid, cache);
+
+    public static void onPlayerJoin(Connection con, EventPlayerSession event, Object2IntMap<String> serverIdCache, Object2IntMap<String> playerIdCache) throws SQLException {
+        final int serverId = getServerId(con, event.server, serverIdCache);
+        final int playerId = getOrInsertPlayerId(con, event.uuid, playerIdCache);
 
         try (PreparedStatement statement = con.prepareStatement("INSERT INTO player_sessions(player_id, server_id, enter, exit) VALUES (?, ?, ?, null)")) {
             statement.setInt(1, playerId);
             statement.setShort(2, (short) serverId);
-            statement.setLong(3, time);
+            statement.setLong(3, event.time);
             statement.execute();
         }
     }
-    public static void onPlayerJoin(Connection con, EventPlayerSession event, Object2IntMap<String> serverIdCache, Object2IntMap<String> playerIdCache) throws SQLException {
-        final int serverId = getServerId(con, event.server, serverIdCache);
-        for (UUID uuid : event.players) {
-            onPlayerJoin0(con, event.time, uuid, serverId, playerIdCache);
-        }
-    }
 
-    private static void onPlayerLeave0(Connection con, long time, UUID uuid, int serverId, Object2IntMap<String> cache) throws SQLException {
-        final int playerId = getOrInsertPlayerId(con, uuid, cache);
+
+    public static void onPlayerLeave(Connection con, EventPlayerSession event, Object2IntMap<String> serverIdCache, Object2IntMap<String> playerIdCache) throws SQLException {
+        final int serverId = getServerId(con, event.server, serverIdCache);
+        final int playerId = getOrInsertPlayerId(con, event.uuid, playerIdCache);
 
         try (PreparedStatement statement = con.prepareStatement("UPDATE online_players SET exit = ? WHERE player_id = ? AND server_id = ?")) {
-            statement.setLong(1, time);
+            statement.setLong(1, event.time);
             statement.setInt(2, playerId);
             statement.setShort(3, (short) serverId);
             statement.execute();
-        }
-    }
-    public static void onPlayerLeave(Connection con, EventPlayerSession event, Object2IntMap<String> serverIdCache, Object2IntMap<String> playerIdCache) throws SQLException {
-        final int serverId = getServerId(con, event.server, serverIdCache);
-        for (UUID uuid : event.players) {
-            onPlayerLeave0(con, event.time, uuid, serverId, playerIdCache);
         }
     }
 
@@ -201,13 +196,25 @@ public class Database {
     }
 
     public static void onStart(Connection con, EventStart event, long rowId, Object2IntMap<String> serverIdCache) throws SQLException {
-        final int serverId = getServerId(con, event.server, serverIdCache);
+        for (String server : event.servers) {
+            final int serverId = getServerId(con, server, serverIdCache);
 
-        try (PreparedStatement statement = con.prepareStatement("UPDATE online_players SET exit = (SELECT COALESCE((event->'timestamp')::bigint, ?) FROM events WHERE ((event->>'type' = 'seed' AND event->>'server' = $2) OR (event->>'type' = 'heartbeat' AND event->'servers' ? $2)) AND id < ? ORDER BY id DESC LIMIT 1) WHERE server_id = ?")) {
-            statement.setLong(1, event.timestamp);
-            statement.setString(2, event.server);
-            statement.setLong(3, rowId);
-            statement.setInt(4, serverId);
+            try (PreparedStatement statement = con.prepareStatement("UPDATE online_players SET exit = (SELECT COALESCE((event->'timestamp')::bigint, ?) FROM events WHERE ((event->>'type' = 'seed' AND event->>'server' = ?) OR (event->>'type' = 'heartbeat' AND event->'servers' ?? ?)) AND id < ? ORDER BY id DESC LIMIT 1) WHERE server_id = ?")) {
+                statement.setLong(1, event.timestamp);
+                statement.setString(2, server);
+                statement.setString(3, server);
+                statement.setLong(4, rowId);
+                statement.setInt(5, serverId);
+                statement.execute();
+            }
+        }
+    }
+
+    // this is probably not useful
+    public static void onPluginStart(Connection con, PluginStartupEvent event, long rowId) throws SQLException {
+        try (PreparedStatement statement = con.prepareStatement("UPDATE online_players SET exit = (SELECT COALESCE((event->'timestamp')::bigint, ?) FROM events WHERE (event->>'type' = 'seed' OR event->>'type' = 'heartbeat') AND id < ? ORDER BY id DESC LIMIT 1)")) {
+            statement.setLong(1, event.time);
+            statement.setLong(2, rowId);
             statement.execute();
         }
     }
