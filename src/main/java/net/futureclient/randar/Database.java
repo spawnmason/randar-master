@@ -187,12 +187,14 @@ public class Database {
 
 
     public static void onStop(Connection con, EventStop event, Object2IntMap<String> serverIdCache) throws SQLException {
-        final int serverId = getServerId(con, event.server, serverIdCache);
+        for (String server : event.servers) {
+            final int serverId = getServerId(con, server, serverIdCache);
 
-        try (PreparedStatement statement = con.prepareStatement("UPDATE online_players SET exit = ? WHERE server_id = ?")) {
-            statement.setLong(1, event.timestamp);
-            statement.setInt(2, serverId);
-            statement.execute();
+            try (PreparedStatement statement = con.prepareStatement("UPDATE online_players SET exit = ? WHERE server_id = ?")) {
+                statement.setLong(1, event.timestamp);
+                statement.setInt(2, serverId);
+                statement.execute();
+            }
         }
     }
 
