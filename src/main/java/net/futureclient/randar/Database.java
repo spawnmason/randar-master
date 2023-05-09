@@ -221,6 +221,7 @@ public class Database {
     }
 
     public static int copyNewSeedEvents(Connection con) throws SQLException {
+        // we might technically want ON CONFLICT DO NOTHING here but no errors have happened in over 10 million rows so far
         try (PreparedStatement statement = con.prepareStatement("INSERT INTO rng_seeds_not_yet_processed (server_id, dimension, received_at, rng_seed) SELECT (SELECT id FROM servers WHERE name = event->>'server'), (event->'dimension')::smallint, (event->'timestamp')::bigint, jsonb_array_elements_text(event->'seeds')::bigint FROM events WHERE id > (SELECT id FROM seed_copy_progress) AND event->>'type' = 'seed' ORDER BY id")) {
             return statement.executeUpdate();
         }
@@ -236,6 +237,7 @@ public class Database {
         LongArrayList seeds = new LongArrayList(LIMIT);
         LongArrayList timestamps = new LongArrayList(LIMIT);
         try (PreparedStatement statement = con.prepareStatement("DELETE FROM rng_seeds_not_yet_processed WHERE id IN (SELECT id FROM rng_seeds_not_yet_processed WHERE dimension = 0 AND server_id = 1 ORDER BY id LIMIT ?) RETURNING rng_seed, received_at")) {
+            statement.setInt(1, LIMIT);
             try (ResultSet rs = statement.executeQuery()) {
                 while (rs.next()) {
                     seeds.add(rs.getLong(1));
@@ -259,8 +261,9 @@ public class Database {
                 statement.setInt(6, processed.x);
                 statement.setInt(7, processed.z);
 
-                statement.execute();
+                statement.addBatch();
             }
+            statement.executeBatch();
         }
     }
 }

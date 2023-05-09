@@ -3,12 +3,14 @@ package net.futureclient.randar;
 import it.unimi.dsi.fastutil.objects.Object2IntArrayMap;
 import net.futureclient.randar.events.*;
 
+import java.io.IOException;
 import java.sql.Connection;
 import java.sql.SQLException;
 
 public class Main {
     private static Thread eventProcessingThread;
     private static Thread seedCopyingThread;
+    private static SeedReverseServer server;
 
     private static int copyNewSeedEvents() throws SQLException {
         try (Connection con = Database.POOL.getConnection()) {
@@ -61,6 +63,8 @@ public class Main {
                         final var eventStartup = new PluginStartupEvent(event.json);
                         Database.onPluginStart(con, eventStartup, event.id);
                         break;
+                    case "detach":
+                        break;
                     default:
                         System.out.println("Unknown event type: " + type);
                         //throw new IllegalStateException("Unknown event type:" + type);
@@ -98,7 +102,6 @@ public class Main {
                 }
             }
         });
-        eventProcessingThread.start();
         seedCopyingThread = new Thread(() -> {
             while (true) {
                 try {
@@ -115,7 +118,14 @@ public class Main {
                 }
             }
         });
+        try {
+            server = new SeedReverseServer();
+        } catch (IOException ex) {
+            ex.printStackTrace();
+            System.exit(1);
+        }
+        server.start();
+        eventProcessingThread.start();
         seedCopyingThread.start();
-
     }
 }

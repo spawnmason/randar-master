@@ -20,12 +20,15 @@ public class SeedReverseServer {
     private final Thread listenThread;
     private final Executor socketIOExecutor;
 
-    public SeedReverseServer() throws Exception {
-        this.server = new ServerSocket(3459, 1, InetAddress.getByName("192.168.69.1"));
+    public SeedReverseServer() throws IOException {
+        this.server = new ServerSocket(3460, 1, InetAddress.getByName("192.168.69.1"));
         this.socketIOExecutor = Executors.newSingleThreadExecutor();
         this.listenThread = new Thread(this::listen);
-        this.listenThread.start();
         System.out.println("nyanserver listening");
+    }
+
+    public void start() {
+        this.listenThread.start();
     }
 
     private void listen() {
@@ -54,7 +57,6 @@ public class SeedReverseServer {
                 return;
             }
             UnprocessedSeeds result = Database.getAndDeleteSeedsToReverse(con);
-            // TODO: THIS IS NEW, ADD TO SEED REVERSER
             out.writeByte(result.dimension);
             out.writeLong(result.server_Seed);
             LongArrayList seeds = result.seeds;
