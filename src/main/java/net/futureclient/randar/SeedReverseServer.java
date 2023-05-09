@@ -49,7 +49,7 @@ public class SeedReverseServer {
             DataInputStream in = new DataInputStream(s.getInputStream());
             DataOutputStream out = new DataOutputStream(s.getOutputStream());
             String secretToken = in.readUTF();
-            if (!secretToken.equals("def7fa9dd0c96bc1dcd2913d19120b7c89c026407fd67053774d316bd90b3459815479eef495f7f93f8f845c544515b77360b60e1214ed786820cb4d94e6abcd v1")) {
+            if (!secretToken.equals("def7fa9dd0c96bc1dcd2913d19120b7c89c026407fd67053774d316bd90b3459815479eef495f7f93f8f845c544515b77360b60e1214ed786820cb4d94e6abcd v2")) {
                 System.out.println("wrong token");
                 return;
             }
