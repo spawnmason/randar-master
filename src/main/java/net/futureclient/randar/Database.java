@@ -245,7 +245,11 @@ public class Database {
         try (PreparedStatement statement = con.prepareStatement("SELECT MAX(id) FROM events WHERE event->>'type' = 'seed'");
              ResultSet rs = statement.executeQuery()) {
             if (rs.next()) {
-                return OptionalLong.of(rs.getLong(1));
+                long id = rs.getLong(1);
+                if (rs.wasNull()) {
+                    return OptionalLong.empty();
+                }
+                return OptionalLong.of(id);
             } else {
                 return OptionalLong.empty();
             }
