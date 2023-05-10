@@ -223,7 +223,6 @@ public class Database {
     }
 
     public static int copyNewSeedEvents(Connection con) throws SQLException {
-        // we might technically want ON CONFLICT DO NOTHING here but no errors have happened in over 10 million rows so far
         try (PreparedStatement statement = con.prepareStatement("INSERT INTO rng_seeds_not_yet_processed (server_id, dimension, received_at, rng_seed) SELECT (SELECT id FROM servers WHERE name = event->>'server'), (event->'dimension')::smallint, (event->'timestamp')::bigint, jsonb_array_elements_text(event->'seeds')::bigint FROM events WHERE id > (SELECT id FROM seed_copy_progress) AND event->>'type' = 'seed' ORDER BY id LIMIT 100000 ON CONFLICT DO NOTHING")) {
             return statement.executeUpdate();
         }
