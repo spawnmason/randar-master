@@ -15,6 +15,8 @@ import java.util.List;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 
+import static net.futureclient.randar.Woodland.*;
+
 public class SeedReverseServer {
     private final ServerSocket server;
     private final Thread listenThread;
@@ -85,6 +87,9 @@ public class SeedReverseServer {
                 processed.add(new ProcessedSeed(seed, steps, x, z));
             }
             System.out.println("received all processed seeds");
+            if (!verifySeeds(processed, result.server_Seed)) {
+                return;
+            }
             // dim 0, 2b2t server id
             Database.saveProcessedSeeds(con, processed, result.timestamps, 0, 1);
             System.out.println("saved all processed seeds to db");
@@ -111,5 +116,15 @@ public class SeedReverseServer {
             System.out.println("Failed to stop executor");
             ex.printStackTrace();
         }
+    }
+
+    private static boolean verifySeeds(List<ProcessedSeed> processed, long worldSeed) {
+        for (ProcessedSeed seed : processed) {
+            if (Woodland.stepRng(seed.steps, Woodland.woodlandMansionSeed(seed.x, seed.z, worldSeed) ^ 0x5DEECE66DL) != seed.rng_seed || seed.x < -WOODLAND_BOUNDS || seed.x > WOODLAND_BOUNDS || seed.z < -WOODLAND_BOUNDS || seed.z > WOODLAND_BOUNDS || seed.steps < 0 || seed.steps > 2750000) {
+                System.out.println("Bad RNG data! " + seed.rng_seed + " " + seed.steps + " " + seed.x + " " + seed.z);
+                return false;
+            }
+        }
+        return true;
     }
 }
