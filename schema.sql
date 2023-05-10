@@ -113,6 +113,25 @@ CREATE TABLE IF NOT EXISTS time_aggregated_seeds (
         ON UPDATE CASCADE ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS annotations (
+    server_id  SMALLINT NOT NULL,
+    dimension  SMALLINT NOT NULL,
+    x          INTEGER  NOT NULL,
+    z          INTEGER  NOT NULL,
+    created_at BIGINT   NOT NULL,
+    title      TEXT, -- the title being null means that you don't want it, or no longer want it, to show up on the heatmap
+    body       TEXT, -- no need to have a body either, maybe both title and body are null if you want to remove the annotation entirely
+
+    CHECK(dimension = 0 OR dimension = 1),
+    CHECK(x >= -23440 * (dimension * 3 + 1) AND x <= 23440 * (dimension * 3 + 1)),
+    CHECK(z >= -23440 * (dimension * 3 + 1) AND z <= 23440 * (dimension * 3 + 1)),
+    CHECK(created_at > 0),
+
+    FOREIGN KEY (server_id) REFERENCES servers (id)
+    ON UPDATE CASCADE ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS annotations_by_server_dimension_x_z_created_at ON annotations (server_id, dimension, x, z, created_at);
+
 CREATE TABLE IF NOT EXISTS players (
     id       SERIAL PRIMARY KEY,
     uuid     UUID NOT NULL UNIQUE,

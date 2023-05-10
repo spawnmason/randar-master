@@ -259,6 +259,7 @@ public class Database {
     public static long getSeedCopyProgress(Connection con) throws SQLException {
         try (PreparedStatement statement = con.prepareStatement("SELECT id FROM seed_copy_progress");
              ResultSet rs = statement.executeQuery()) {
+            rs.next();
             return rs.getLong(1);
         }
     }
