@@ -256,6 +256,13 @@ public class Database {
         }
     }
 
+    public static long getSeedCopyProgress(Connection con) throws SQLException {
+        try (PreparedStatement statement = con.prepareStatement("SELECT id FROM seed_copy_progress");
+             ResultSet rs = statement.executeQuery()) {
+            return rs.getLong(1);
+        }
+    }
+
     public static UnprocessedSeeds getAndDeleteSeedsToReverse(Connection con) throws SQLException {
         final int LIMIT = 100000;
         LongArrayList seeds = new LongArrayList(LIMIT);

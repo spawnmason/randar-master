@@ -21,8 +21,13 @@ public class Main {
             if (maxID.isEmpty()) {
                 return 0;
             }
-            final int updates = Database.copyNewSeedEvents(con, maxID.getAsLong());
-            Database.updateSeedCopyProgress(con, maxID.getAsLong());
+            final long progress = Database.getSeedCopyProgress(con);
+            if (progress >= maxID.getAsLong()) {
+                return 0;
+            }
+            final long copyUpTo = Math.min(maxID.getAsLong(), progress + 100000);
+            final int updates = Database.copyNewSeedEvents(con, copyUpTo);
+            Database.updateSeedCopyProgress(con, copyUpTo);
 
             con.commit();
             return updates;
