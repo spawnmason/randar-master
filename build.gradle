@@ -37,3 +37,4 @@ shadowJar {
 }
 
 build.dependsOn shadowJar
+sourceCompatibility = JavaVersion.VERSION_11
