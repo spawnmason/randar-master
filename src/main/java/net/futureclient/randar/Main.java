@@ -6,6 +6,7 @@ import net.futureclient.randar.events.*;
 import java.io.IOException;
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.util.OptionalLong;
 
 public class Main {
     private static Thread eventProcessingThread;
@@ -16,8 +17,12 @@ public class Main {
         try (Connection con = Database.POOL.getConnection()) {
             con.setAutoCommit(false);
 
-            final int updates = Database.copyNewSeedEvents(con);
-            Database.updateSeedCopyProgress(con);
+            final OptionalLong maxID = Database.maxSeedID(con);
+            if (maxID.isEmpty()) {
+                return 0;
+            }
+            final int updates = Database.copyNewSeedEvents(con, maxID.getAsLong());
+            Database.updateSeedCopyProgress(con, maxID.getAsLong());
 
             con.commit();
             return updates;
