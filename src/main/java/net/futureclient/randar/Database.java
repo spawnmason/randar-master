@@ -272,13 +272,13 @@ public class Database {
             }
             statement.executeBatch();
         }
-        for (Timescale scale : Timescale.values()) {
-            try (PreparedStatement statement = con.prepareStatement("INSERT INTO time_aggregated_seeds(server_id, dimension, timescale, time_idx, x, z, quantity) VALUES (?, ?, ?, ?, ?, ?, 1) ON CONFLICT (server_id, dimension, timescale, time_idx, x, z) DO UPDATE SET quantity = time_aggregated_seeds.quantity + 1;")) {
+        for (short timescale = 0; timescale < TIMESCALES.length; timescale++) {
+            try (PreparedStatement statement = con.prepareStatement("INSERT INTO time_aggregated_seeds(server_id, dimension, timescale, time_idx, x, z, quantity) VALUES (?, ?, ?, ?, ?, ?, 1) ON CONFLICT (server_id, dimension, timescale, time_idx, x, z) DO UPDATE SET quantity = time_aggregated_seeds.quantity + 1")) {
                 for (int i = 0; i < seeds.size(); i++) {
                     statement.setShort(1, (short) serverId);
                     statement.setShort(2, (short) dimension);
-                    statement.setShort(3, scale.databaseTimescale);
-                    statement.setInt(4, (int) (timestamps.getLong(i) / scale.timeMult));
+                    statement.setShort(3, timescale);
+                    statement.setInt(4, (int) (timestamps.getLong(i) / TIMESCALES[timescale]));
                     ProcessedSeed processed = seeds.get(i);
                     statement.setInt(5, processed.x);
                     statement.setInt(6, processed.z);
@@ -289,16 +289,5 @@ public class Database {
         }
     }
 
-    public enum Timescale {
-        ALL_TIME(Long.MAX_VALUE, (short) 0),
-        DAILY(TimeUnit.DAYS.toMillis(1), (short) 1),
-        HOURLY(TimeUnit.HOURS.toMillis(1), (short) 2);
-        public final long timeMult;
-        public final short databaseTimescale;
-
-        Timescale(long timeMult, short databaseTimescale) {
-            this.timeMult = timeMult;
-            this.databaseTimescale = databaseTimescale;
-        }
-    }
+    private static final long[] TIMESCALES = {Long.MAX_VALUE, TimeUnit.DAYS.toMillis(1), TimeUnit.HOURS.toMillis(1)};
 }
