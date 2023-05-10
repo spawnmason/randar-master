@@ -90,6 +90,29 @@ CREATE TABLE IF NOT EXISTS rng_seeds (
 );
 CREATE INDEX IF NOT EXISTS rng_seeds_by_x_z ON rng_seeds (server_id, dimension, structure_x, structure_z, received_at);
 
+CREATE TABLE IF NOT EXISTS time_aggregated_seeds (
+    timescale SMALLINT NOT NULL,
+    server_id SMALLINT NOT NULL,
+    dimension SMALLINT NOT NULL,
+    time_idx  INTEGER  NOT NULL,
+    x         INTEGER  NOT NULL,
+    z         INTEGER  NOT NULL,
+    quantity  INTEGER  NOT NULL,
+
+    UNIQUE(server_id, dimension, timescale, time_idx, x, z),
+
+    CHECK(timescale >= 0),
+    CHECK(dimension = 0 OR dimension = 1),
+    CHECK(time_idx >= 0),
+    CHECK(x >= -23440 * (dimension * 3 + 1) AND x <= 23440 * (dimension * 3 + 1)),
+    CHECK(z >= -23440 * (dimension * 3 + 1) AND z <= 23440 * (dimension * 3 + 1)),
+    CHECK(quantity > 0),
+    CHECK((timescale = 0) = (time_idx = 0)),
+
+    FOREIGN KEY (server_id) REFERENCES servers (id)
+        ON UPDATE CASCADE ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS players (
     id       SERIAL PRIMARY KEY,
     uuid     UUID NOT NULL UNIQUE,

@@ -7,8 +7,12 @@ import it.unimi.dsi.fastutil.objects.Object2IntMap;
 import net.futureclient.randar.events.*;
 import org.apache.commons.dbcp2.BasicDataSource;
 
-import java.sql.*;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 
 public class Database {
     public static final BasicDataSource POOL = connect();
@@ -134,6 +138,7 @@ public class Database {
             }
         }
     }
+
     private static int getOrInsertPlayerId(Connection con, UUID uuid, Object2IntMap<String> cache) throws SQLException {
         final String uuidString = uuid.toString();
         OptionalInt existing = getIdByString(con, uuidString, cache, "SELECT id FROM players WHERE uuid = ?::UUID");
@@ -227,6 +232,7 @@ public class Database {
             return statement.executeUpdate();
         }
     }
+
     public static void updateSeedCopyProgress(Connection con) throws SQLException {
         try (PreparedStatement statement = con.prepareStatement("UPDATE seed_copy_progress SET id = (SELECT MAX(id) FROM events WHERE event->>'type' = 'seed')")) {
             statement.execute();
@@ -265,6 +271,34 @@ public class Database {
                 statement.addBatch();
             }
             statement.executeBatch();
+        }
+        for (Timescale scale : Timescale.values()) {
+            try (PreparedStatement statement = con.prepareStatement("INSERT INTO time_aggregated_seeds(server_id, dimension, timescale, time_idx, x, z, quantity) VALUES (?, ?, ?, ?, ?, ?, 1) ON CONFLICT (server_id, dimension, timescale, time_idx, x, z) DO UPDATE SET quantity = time_aggregated_seeds.quantity + 1;")) {
+                for (int i = 0; i < seeds.size(); i++) {
+                    statement.setShort(1, (short) serverId);
+                    statement.setShort(2, (short) dimension);
+                    statement.setShort(3, scale.databaseTimescale);
+                    statement.setInt(4, (int) (timestamps.getLong(i) / scale.timeMult));
+                    ProcessedSeed processed = seeds.get(i);
+                    statement.setInt(5, processed.x);
+                    statement.setInt(6, processed.z);
+                    statement.addBatch();
+                }
+                statement.executeBatch();
+            }
+        }
+    }
+
+    public enum Timescale {
+        ALL_TIME(Long.MAX_VALUE, (short) 0),
+        DAILY(TimeUnit.DAYS.toMillis(1), (short) 1),
+        HOURLY(TimeUnit.HOURS.toMillis(1), (short) 2);
+        public final long timeMult;
+        public final short databaseTimescale;
+
+        Timescale(long timeMult, short databaseTimescale) {
+            this.timeMult = timeMult;
+            this.databaseTimescale = databaseTimescale;
         }
     }
 }
