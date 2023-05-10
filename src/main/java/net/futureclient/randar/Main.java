@@ -80,7 +80,6 @@ public class Main {
 
 
     public static void main(String[] args) {
-        if (true) return;
         new Database();
         eventProcessingThread = new Thread(() -> {
             while (true) {
