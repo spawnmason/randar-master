@@ -88,6 +88,7 @@ CREATE TABLE IF NOT EXISTS rng_seeds (
     FOREIGN KEY (server_id) REFERENCES servers (id)
         ON UPDATE CASCADE ON DELETE CASCADE
 );
+CREATE INDEX IF NOT EXISTS rng_seeds_by_x_z ON rng_seeds (server_id, dimension, structure_x, structure_z, received_at);
 
 CREATE TABLE IF NOT EXISTS players (
     id       SERIAL PRIMARY KEY,
