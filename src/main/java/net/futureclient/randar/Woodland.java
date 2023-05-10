@@ -25,7 +25,7 @@ public class Woodland {
     private static final long chunkZMultInv248 = 211541297333629L; // https://www.wolframalpha.com/input?i=132897987541%5E-1+mod+2%5E48
 
     public static long woodlandMansionSeed(int x, int z, long worldSeed) { // from World and WoodlandMansion
-        return ((long) z * 341873128712L + (long) z * 132897987541L + worldSeed + (long) 10387319) & ((1L << 48) - 1); // rand drops highest 16 bits anyway
+        return ((long) x * 341873128712L + (long) z * 132897987541L + worldSeed + (long) 10387319) & ((1L << 48) - 1); // rand drops highest 16 bits anyway
     }
 
     public static long reverseWoodlandZGivenX(long seed48Bits, int x, long worldSeed) {
