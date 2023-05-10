@@ -130,7 +130,7 @@ CREATE TABLE IF NOT EXISTS annotations (
     FOREIGN KEY (server_id) REFERENCES servers (id)
     ON UPDATE CASCADE ON DELETE CASCADE
 );
-CREATE INDEX IF NOT EXISTS annotations_by_server_dimension_x_z_created_at ON annotations (server_id, dimension, x, z, created_at);
+CREATE UNIQUE INDEX IF NOT EXISTS annotations_by_server_dimension_x_z_created_at ON annotations (server_id, dimension, x, z, created_at);
 
 CREATE TABLE IF NOT EXISTS players (
     id       SERIAL PRIMARY KEY,
