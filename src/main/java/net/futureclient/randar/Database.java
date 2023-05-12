@@ -2,8 +2,10 @@ package net.futureclient.randar;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import it.unimi.dsi.fastutil.ints.Int2ObjectArrayMap;
 import it.unimi.dsi.fastutil.longs.LongArrayList;
 import it.unimi.dsi.fastutil.objects.Object2IntMap;
+import it.unimi.dsi.fastutil.objects.Object2ObjectArrayMap;
 import net.futureclient.randar.events.*;
 import org.apache.commons.dbcp2.BasicDataSource;
 
@@ -264,28 +266,37 @@ public class Database {
         }
     }
 
-    public static UnprocessedSeeds getAndDeleteSeedsToReverse(Connection con) throws SQLException {
+    public static Map<World, UnprocessedSeeds> getAndDeleteSeedsToReverse(Connection con) throws SQLException {
         final int LIMIT = 100000;
-        LongArrayList seeds = new LongArrayList(LIMIT);
-        LongArrayList timestamps = new LongArrayList(LIMIT);
-        try (PreparedStatement statement = con.prepareStatement("DELETE FROM rng_seeds_not_yet_processed WHERE id IN (SELECT id FROM rng_seeds_not_yet_processed WHERE dimension = 0 AND server_id = 1 ORDER BY id LIMIT ?) RETURNING rng_seed, received_at")) {
+        var seedsByWorld = new Int2ObjectArrayMap<UnprocessedSeeds>();
+        try (PreparedStatement statement = con.prepareStatement("DELETE FROM rng_seeds_not_yet_processed WHERE id IN (SELECT id FROM rng_seeds_not_yet_processed ORDER BY id LIMIT ?) RETURNING dimension, server_id, rng_seed, received_at")) {
             statement.setInt(1, LIMIT);
             try (ResultSet rs = statement.executeQuery()) {
                 while (rs.next()) {
-                    seeds.add(rs.getLong(1));
-                    timestamps.add(rs.getLong(2));
+                    short dim = rs.getShort(1);
+                    short serverId = rs.getShort(2);
+                    int world = ((int)serverId) << 16 | dim;
+                    UnprocessedSeeds data = seedsByWorld.computeIfAbsent(world, __ -> new UnprocessedSeeds(new LongArrayList(LIMIT), new LongArrayList(LIMIT)));
+                    data.seeds.add(rs.getLong(3));
+                    data.timestamps.add(rs.getLong(2));
                 }
-                return new UnprocessedSeeds(0, -4172144997902289642L, timestamps, seeds);
             }
         }
+        List<World> allWorlds = getAllWorlds(con);
+        var out = new Object2ObjectArrayMap<World, UnprocessedSeeds>();
+        seedsByWorld.forEach((key, seeds) -> {
+            World world = allWorlds.stream().filter(w -> (((int)w.serverId) << 16 | w.dimension) == key).findFirst().get();
+            out.put(world, seeds);
+        });
+        return out;
     }
 
-    public static void saveProcessedSeeds(Connection con, List<ProcessedSeed> seeds, LongArrayList timestamps, int dimension, int serverId) throws SQLException {
+    public static void saveProcessedSeeds(Connection con, List<ProcessedSeed> seeds, LongArrayList timestamps, short dimension, short serverId) throws SQLException {
         if (seeds.size() != timestamps.size()) throw new IllegalStateException();
         try (PreparedStatement statement = con.prepareStatement("INSERT INTO rng_seeds(server_id, dimension, received_at, rng_seed, steps_back, structure_x, structure_z) VALUES (?, ?, ?, ?, ?, ?, ?)")) {
             for (int i = 0; i < seeds.size(); i++) {
-                statement.setShort(1, (short) serverId);
-                statement.setShort(2, (short) dimension);
+                statement.setShort(1, serverId);
+                statement.setShort(2, dimension);
                 statement.setLong(3, timestamps.getLong(i));
                 ProcessedSeed processed = seeds.get(i);
                 statement.setLong(4, processed.rng_seed);
@@ -315,4 +326,15 @@ public class Database {
     }
 
     private static final long[] TIMESCALES = {Long.MAX_VALUE, TimeUnit.DAYS.toMillis(1), TimeUnit.HOURS.toMillis(1)};
+
+    public static List<World> getAllWorlds(Connection con) throws SQLException {
+        try (PreparedStatement statement = con.prepareStatement("SELECT s.name, server_id, dimension, seed FROM worlds INNER JOIN servers s on worlds.server_id = s.id");
+             ResultSet rs = statement.executeQuery()) {
+            List<World> out = new ArrayList<>();
+            while (rs.next()) {
+                out.add(new World(rs.getString(1), rs.getShort(2), rs.getShort(3), rs.getLong(4)));
+            }
+            return out;
+        }
+    }
 }

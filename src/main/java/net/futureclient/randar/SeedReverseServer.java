@@ -12,6 +12,7 @@ import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 
@@ -54,45 +55,51 @@ public class SeedReverseServer {
             DataInputStream in = new DataInputStream(s.getInputStream());
             DataOutputStream out = new DataOutputStream(s.getOutputStream());
             String secretToken = in.readUTF();
-            if (!secretToken.equals("def7fa9dd0c96bc1dcd2913d19120b7c89c026407fd67053774d316bd90b3459815479eef495f7f93f8f845c544515b77360b60e1214ed786820cb4d94e6abcd v2")) {
+            if (!secretToken.equals("def7fa9dd0c96bc1dcd2913d19120b7c89c026407fd67053774d316bd90b3459815479eef495f7f93f8f845c544515b77360b60e1214ed786820cb4d94e6abcd v3")) {
                 System.out.println("wrong token");
                 return;
             }
-            UnprocessedSeeds result = Database.getAndDeleteSeedsToReverse(con);
-            out.writeByte(result.dimension);
-            out.writeLong(result.server_Seed);
-            LongArrayList seeds = result.seeds;
-            System.out.println("nyanserver sending " + seeds.size() + " seeds");
-            out.writeInt(seeds.size());
-            for (long seed : seeds) {
-                out.writeLong(seed);
-            }
-            // some time passes...
-            int numProcessed = in.readInt();
-            System.out.println("nyanserver got back " + numProcessed + " seeds");
-            if (numProcessed != seeds.size()) {
-                System.out.println("Expected " + seeds.size() + " seeds back but got " + numProcessed);
-                return;
-            }
-            List<ProcessedSeed> processed = new ArrayList<>(numProcessed);
-            for (int i = 0; i < numProcessed; i++) {
-                long seed = in.readLong();
-                if (seeds.getLong(i) != seed) {
-                    System.out.println("naughty");
+            Map<World, UnprocessedSeeds> results = Database.getAndDeleteSeedsToReverse(con);
+            out.writeByte(results.size());
+            for (var entry : results.entrySet()) {
+                final World world = entry.getKey();
+                final UnprocessedSeeds result = entry.getValue();
+                out.writeByte(world.dimension);
+                out.writeLong(world.worldSeed);
+                LongArrayList seeds = result.seeds;
+                System.out.println("nyanserver sending " + seeds.size() + " seeds");
+                out.writeInt(seeds.size());
+                if (seeds.isEmpty()) continue; // nothing needs to be done if there are no seeds (important for the client to match this behavior)
+                for (long seed : seeds) {
+                    out.writeLong(seed);
+                }
+                // some time passes...
+                int numProcessed = in.readInt();
+                System.out.println("nyanserver got back " + numProcessed + " seeds");
+                if (numProcessed != seeds.size()) {
+                    System.out.println("Expected " + seeds.size() + " seeds back but got " + numProcessed);
                     return;
                 }
-                int steps = in.readInt();
-                short x = in.readShort();
-                short z = in.readShort();
-                processed.add(new ProcessedSeed(seed, steps, x, z));
+                List<ProcessedSeed> processed = new ArrayList<>(numProcessed);
+                for (int i = 0; i < numProcessed; i++) {
+                    long seed = in.readLong();
+                    if (seeds.getLong(i) != seed) {
+                        System.out.println("naughty");
+                        return;
+                    }
+                    int steps = in.readInt();
+                    short x = in.readShort();
+                    short z = in.readShort();
+                    processed.add(new ProcessedSeed(seed, steps, x, z));
+                }
+                System.out.println("received all processed seeds");
+                if (!verifySeeds(processed, world.worldSeed)) {
+                    return;
+                }
+                Database.saveProcessedSeeds(con, processed, result.timestamps, world.dimension, world.serverId);
+                System.out.println("saved all processed seeds to db");
             }
-            System.out.println("received all processed seeds");
-            if (!verifySeeds(processed, result.server_Seed)) {
-                return;
-            }
-            // dim 0, 2b2t server id
-            Database.saveProcessedSeeds(con, processed, result.timestamps, 0, 1);
-            System.out.println("saved all processed seeds to db");
+
             con.commit();
             System.out.println("All changes are committed");
         } catch (SQLException ex) {
