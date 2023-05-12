@@ -278,7 +278,7 @@ public class Database {
                     int world = ((int)serverId) << 16 | dim;
                     UnprocessedSeeds data = seedsByWorld.computeIfAbsent(world, __ -> new UnprocessedSeeds(new LongArrayList(LIMIT), new LongArrayList(LIMIT)));
                     data.seeds.add(rs.getLong(3));
-                    data.timestamps.add(rs.getLong(2));
+                    data.timestamps.add(rs.getLong(4));
                 }
             }
         }
