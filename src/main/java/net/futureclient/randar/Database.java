@@ -269,7 +269,7 @@ public class Database {
     public static Map<World, UnprocessedSeeds> getAndDeleteSeedsToReverse(Connection con) throws SQLException {
         final int LIMIT = 100000;
         var seedsByWorld = new Int2ObjectArrayMap<UnprocessedSeeds>();
-        try (PreparedStatement statement = con.prepareStatement("DELETE FROM rng_seeds_not_yet_processed WHERE id IN (SELECT id FROM rng_seeds_not_yet_processed ORDER BY id LIMIT ?) RETURNING dimension, server_id, rng_seed, received_at")) {
+        try (PreparedStatement statement = con.prepareStatement("DELETE FROM rng_seeds_not_yet_processed WHERE id IN (SELECT id FROM rng_seeds_not_yet_processed WHERE dimension = 0 ORDER BY id LIMIT ?) RETURNING dimension, server_id, rng_seed, received_at")) {
             statement.setInt(1, LIMIT);
             try (ResultSet rs = statement.executeQuery()) {
                 while (rs.next()) {
