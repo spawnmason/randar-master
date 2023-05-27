@@ -134,20 +134,20 @@ CREATE UNIQUE INDEX IF NOT EXISTS annotations_by_server_dimension_x_z_created_at
 
 CREATE TABLE IF NOT EXISTS players (
     id       SERIAL PRIMARY KEY,
-    uuid     UUID NOT NULL UNIQUE,
-    username TEXT DEFAULT NULL
+    uuid     UUID NOT NULL UNIQUE
 );
 
-CREATE INDEX IF NOT EXISTS players_by_username ON players (username);
+CREATE TABLE IF NOT EXISTS name_history
+(
+    player_id   INTEGER NOT NULL,
+    username    TEXT    NOT NULL,
+    observed_at BIGINT  NOT NULL,
 
-CREATE TABLE IF NOT EXISTS name_history (
-  player_id INTEGER NOT NULL,
-  username  TEXT NOT NULL,
-  time      BIGINT NOT NULL,
-
-  FOREIGN KEY (player_id) REFERENCES players (id)
-      ON UPDATE CASCADE ON DELETE CASCADE
+    FOREIGN KEY (player_id) REFERENCES players (id)
+        ON UPDATE CASCADE ON DELETE CASCADE
 );
+CREATE INDEX IF NOT EXISTS name_history_by_player_id ON name_history (player_id);
+CREATE INDEX IF NOT EXISTS name_history_by_username ON name_history (username);
 
 
 CREATE EXTENSION IF NOT EXISTS btree_gist;

@@ -141,15 +141,43 @@ public class Database {
         }
     }
 
-    private static int getOrInsertPlayerId(Connection con, UUID uuid, Object2IntMap<String> cache) throws SQLException {
-        final String uuidString = uuid.toString();
-        OptionalInt existing = getIdByString(con, uuidString, cache, "SELECT id FROM players WHERE uuid = ?::UUID");
-        if (existing.isPresent()) {
-            return existing.getAsInt();
+    private static Optional<String> getMostRecentNameIfPresent(Connection con, int playerId) throws SQLException {
+        try (PreparedStatement statement = con.prepareStatement("SELECT username FROM name_history WHERE player_id = ? ORDER BY observed_at DESC LIMIT 1")) {
+            statement.setInt(1, playerId);
+            try (ResultSet rs = statement.executeQuery()) {
+                if (rs.next()) {
+                    return Optional.of(rs.getString(1));
+                } else {
+                    return Optional.empty();
+                }
+            }
         }
-        int newId = insertPlayer(con, uuidString);
-        cache.put(uuidString, newId);
-        return newId;
+    }
+
+    private static void updatedUsername(Connection con, int playerId, String username, long timestamp) throws SQLException {
+        try (PreparedStatement stmt = con.prepareStatement("INSERT INTO name_history (player_id, username, observed_at) VALUES (?, ?, ?)")) {
+            stmt.setInt(1, playerId);
+            stmt.setString(2, username);
+            stmt.setLong(3, timestamp);
+            stmt.execute();
+        }
+    }
+
+    private static int getOrInsertPlayerIdAndName(Connection con, UUID uuid, String username, long when) throws SQLException {
+        final String uuidString = uuid.toString();
+        OptionalInt existing = queryId(con, uuidString, "SELECT id FROM players WHERE uuid = ?::UUID");
+        int playerId;
+        if (existing.isPresent()) {
+            playerId = existing.getAsInt();
+        } else {
+            playerId = insertPlayer(con, uuidString);
+        }
+        Optional<String> oldUsername = getMostRecentNameIfPresent(con, playerId);
+        if (!oldUsername.equals(Optional.of(username))) {
+            oldUsername.ifPresent(old -> System.out.println("Name change " + old + " to " + username + " at " + when));
+            updatedUsername(con, playerId, username, when);
+        }
+        return playerId;
     }
 
     public static void addNewSeed(Connection con, EventSeed event, Object2IntMap<String> serverIdCache) throws SQLException {
@@ -166,10 +194,39 @@ public class Database {
         }
     }
 
+    public static void backfillPlayerNameHistoryFromEvents() { // this function should only run once, ever
+        try (Connection con = Database.POOL.getConnection()) {
+            con.setAutoCommit(false);
+            try (PreparedStatement statement = con.prepareStatement("SELECT COUNT(*) FROM (SELECT * FROM name_history LIMIT 1) tmp");
+                 ResultSet rs = statement.executeQuery()) {
+                rs.next();
+                if (rs.getInt(1) == 1) {
+                    return; // players already have name history
+                }
+            }
+            // if the db is brand new and all tables are empty this will just be a no-op which is fine
+            // otherwise, if name_history is empty, that means there must have been no player_join or player_leave events processed yet, in which case, again, this is a no-op which is fine
+            // if name_history is empty and there ARE skipped joins or leaves, then this is good and we should backfill
+            try (PreparedStatement statement = con.prepareStatement("SELECT id, event FROM events WHERE id <= (SELECT id FROM event_progress) AND (event->>'type' = 'player_join' OR event->>'type' = 'player_leave') ORDER BY id");
+                 ResultSet rs = statement.executeQuery()) {
+                while (rs.next()) {
+                    final long id = rs.getLong(1);
+                    final String json = rs.getString(2);
+                    final var event = new EventPlayerSession(JsonParser.parseString(json).getAsJsonObject());
+                    getOrInsertPlayerIdAndName(con, event.uuid, event.username, event.time);
+                    if (Math.random() < 1 / 10000d) System.out.println("Processed event " + id);
+                }
+            }
+            con.commit();
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
 
-    public static void onPlayerJoin(Connection con, EventPlayerSession event, Object2IntMap<String> serverIdCache, Object2IntMap<String> playerIdCache) throws SQLException {
+
+    public static void onPlayerJoin(Connection con, EventPlayerSession event, Object2IntMap<String> serverIdCache) throws SQLException {
         final int serverId = getServerId(con, event.server, serverIdCache);
-        final int playerId = getOrInsertPlayerId(con, event.uuid, playerIdCache);
+        final int playerId = getOrInsertPlayerIdAndName(con, event.uuid, event.username, event.time);
 
         try (PreparedStatement statement = con.prepareStatement("INSERT INTO player_sessions(player_id, server_id, enter, exit) VALUES (?, ?, ?, null)")) {
             statement.setInt(1, playerId);
@@ -180,9 +237,9 @@ public class Database {
     }
 
 
-    public static void onPlayerLeave(Connection con, EventPlayerSession event, Object2IntMap<String> serverIdCache, Object2IntMap<String> playerIdCache) throws SQLException {
+    public static void onPlayerLeave(Connection con, EventPlayerSession event, Object2IntMap<String> serverIdCache) throws SQLException {
         final int serverId = getServerId(con, event.server, serverIdCache);
-        final int playerId = getOrInsertPlayerId(con, event.uuid, playerIdCache);
+        final int playerId = getOrInsertPlayerIdAndName(con, event.uuid, event.username, event.time);
 
         try (PreparedStatement statement = con.prepareStatement("UPDATE online_players SET exit = ? WHERE player_id = ? AND server_id = ?")) {
             statement.setLong(1, event.time);
@@ -275,7 +332,7 @@ public class Database {
                 while (rs.next()) {
                     short dim = rs.getShort(1);
                     short serverId = rs.getShort(2);
-                    int world = ((int)serverId) << 16 | dim;
+                    int world = ((int) serverId) << 16 | dim;
                     UnprocessedSeeds data = seedsByWorld.computeIfAbsent(world, __ -> new UnprocessedSeeds(new LongArrayList(LIMIT), new LongArrayList(LIMIT)));
                     data.seeds.add(rs.getLong(3));
                     data.timestamps.add(rs.getLong(4));
@@ -285,7 +342,7 @@ public class Database {
         List<World> allWorlds = getAllWorlds(con);
         var out = new Object2ObjectArrayMap<World, UnprocessedSeeds>();
         seedsByWorld.forEach((key, seeds) -> {
-            World world = allWorlds.stream().filter(w -> (((int)w.serverId) << 16 | w.dimension) == key).findFirst().get();
+            World world = allWorlds.stream().filter(w -> (((int) w.serverId) << 16 | w.dimension) == key).findFirst().get();
             out.put(world, seeds);
         });
         return out;

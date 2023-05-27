@@ -40,7 +40,6 @@ public class Main {
             var events = Database.queryNewEvents(con, limit);
             System.out.println("Got " + events.size() + " events");
             var serverIdCache = new Object2IntArrayMap<String>();
-            var playerIdCache = new Object2IntArrayMap<String>();
             for (var event : events) {
                 final String type = event.json.get("type").getAsString();
                 switch (type) {
@@ -51,11 +50,11 @@ public class Main {
                         break;
                     case "player_join":
                         final var eventJoin = new EventPlayerSession(event.json);
-                        Database.onPlayerJoin(con, eventJoin, serverIdCache, playerIdCache);
+                        Database.onPlayerJoin(con, eventJoin, serverIdCache);
                         break;
                     case "player_leave":
                         final var eventLeave = new EventPlayerSession(event.json);
-                        Database.onPlayerLeave(con, eventLeave, serverIdCache, playerIdCache);
+                        Database.onPlayerLeave(con, eventLeave, serverIdCache);
                         break;
                     case "start":
                         final var eventStart = new EventStart(event.json);
@@ -91,6 +90,7 @@ public class Main {
 
     public static void main(String[] args) {
         new Database();
+        Database.backfillPlayerNameHistoryFromEvents();
         eventProcessingThread = new Thread(() -> {
             while (true) {
                 final int limit = 1000;
