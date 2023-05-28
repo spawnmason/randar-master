@@ -90,7 +90,8 @@ public class Main {
 
     public static void main(String[] args) {
         new Database();
-        Database.backfillPlayerNameHistoryFromEvents();
+        //Database.backfillPlayerNameHistoryFromEvents();
+        while (Associator.doAssociate()) System.out.println("Associating");
         eventProcessingThread = new Thread(() -> {
             while (true) {
                 final int limit = 1000;

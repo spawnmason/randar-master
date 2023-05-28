@@ -79,12 +79,12 @@ public class Database {
     public static List<Event> queryNewEvents(Connection con, int limit) throws SQLException {
         List<Event> out = new ArrayList<>();
         // should we have an index?
-        try (PreparedStatement statement = con.prepareStatement("SELECT id,event FROM events WHERE id > (SELECT id FROM event_progress) AND event->>'type' NOT IN ('seed', 'attach') ORDER BY id LIMIT ?")) {
+        try (PreparedStatement statement = con.prepareStatement("SELECT id, event FROM events WHERE id > (SELECT id FROM event_progress) AND event->>'type' NOT IN ('seed', 'attach') ORDER BY id LIMIT ?")) {
             statement.setInt(1, limit);
             try (ResultSet rs = statement.executeQuery()) {
                 while (rs.next()) {
-                    final long id = rs.getLong(1);
-                    final String json = rs.getString(2);
+                    final long id = rs.getLong("id");
+                    final String json = rs.getString("event");
                     out.add(new Event(id, JsonParser.parseString(json).getAsJsonObject()));
                 }
             }
@@ -136,7 +136,7 @@ public class Database {
             statement.setString(1, uuid);
             try (ResultSet rs = statement.executeQuery()) {
                 if (!rs.next()) throw new IllegalStateException("no id returned from insertPlayer?");
-                return rs.getInt(1);
+                return rs.getInt("id");
             }
         }
     }
@@ -146,7 +146,7 @@ public class Database {
             statement.setInt(1, playerId);
             try (ResultSet rs = statement.executeQuery()) {
                 if (rs.next()) {
-                    return Optional.of(rs.getString(1));
+                    return Optional.of(rs.getString("username"));
                 } else {
                     return Optional.empty();
                 }
@@ -197,10 +197,10 @@ public class Database {
     public static void backfillPlayerNameHistoryFromEvents() { // this function should only run once, ever
         try (Connection con = Database.POOL.getConnection()) {
             con.setAutoCommit(false);
-            try (PreparedStatement statement = con.prepareStatement("SELECT COUNT(*) FROM (SELECT * FROM name_history LIMIT 1) tmp");
+            try (PreparedStatement statement = con.prepareStatement("SELECT COUNT(*) AS cnt FROM (SELECT * FROM name_history LIMIT 1) tmp");
                  ResultSet rs = statement.executeQuery()) {
                 rs.next();
-                if (rs.getInt(1) == 1) {
+                if (rs.getInt("cnt") == 1) {
                     return; // players already have name history
                 }
             }
@@ -210,8 +210,8 @@ public class Database {
             try (PreparedStatement statement = con.prepareStatement("SELECT id, event FROM events WHERE id <= (SELECT id FROM event_progress) AND (event->>'type' = 'player_join' OR event->>'type' = 'player_leave') ORDER BY id");
                  ResultSet rs = statement.executeQuery()) {
                 while (rs.next()) {
-                    final long id = rs.getLong(1);
-                    final String json = rs.getString(2);
+                    final long id = rs.getLong("id");
+                    final String json = rs.getString("event");
                     final var event = new EventPlayerSession(JsonParser.parseString(json).getAsJsonObject());
                     getOrInsertPlayerIdAndName(con, event.uuid, event.username, event.time);
                     if (Math.random() < 1 / 10000d) System.out.println("Processed event " + id);
@@ -301,10 +301,10 @@ public class Database {
     }
 
     public static OptionalLong maxSeedID(Connection con) throws SQLException {
-        try (PreparedStatement statement = con.prepareStatement("SELECT MAX(id) FROM events WHERE event->>'type' = 'seed'");
+        try (PreparedStatement statement = con.prepareStatement("SELECT MAX(id) AS max_id FROM events WHERE event->>'type' = 'seed'");
              ResultSet rs = statement.executeQuery()) {
             if (rs.next()) {
-                long id = rs.getLong(1);
+                long id = rs.getLong("max_id");
                 if (rs.wasNull()) {
                     return OptionalLong.empty();
                 }
@@ -319,7 +319,7 @@ public class Database {
         try (PreparedStatement statement = con.prepareStatement("SELECT id FROM seed_copy_progress");
              ResultSet rs = statement.executeQuery()) {
             rs.next();
-            return rs.getLong(1);
+            return rs.getLong("id");
         }
     }
 
@@ -330,12 +330,12 @@ public class Database {
             statement.setInt(1, LIMIT);
             try (ResultSet rs = statement.executeQuery()) {
                 while (rs.next()) {
-                    short dim = rs.getShort(1);
-                    short serverId = rs.getShort(2);
+                    short dim = rs.getShort("dimension");
+                    short serverId = rs.getShort("server_id");
                     int world = ((int) serverId) << 16 | dim;
                     UnprocessedSeeds data = seedsByWorld.computeIfAbsent(world, __ -> new UnprocessedSeeds(new LongArrayList(LIMIT), new LongArrayList(LIMIT)));
-                    data.seeds.add(rs.getLong(3));
-                    data.timestamps.add(rs.getLong(4));
+                    data.seeds.add(rs.getLong("rng_seed"));
+                    data.timestamps.add(rs.getLong("received_at"));
                 }
             }
         }
@@ -385,13 +385,39 @@ public class Database {
     private static final long[] TIMESCALES = {Long.MAX_VALUE, TimeUnit.DAYS.toMillis(1), TimeUnit.HOURS.toMillis(1)};
 
     public static List<World> getAllWorlds(Connection con) throws SQLException {
-        try (PreparedStatement statement = con.prepareStatement("SELECT s.name, server_id, dimension, seed FROM worlds INNER JOIN servers s on worlds.server_id = s.id");
+        try (PreparedStatement statement = con.prepareStatement("SELECT s.name AS name, server_id, dimension, seed FROM worlds INNER JOIN servers s on worlds.server_id = s.id");
              ResultSet rs = statement.executeQuery()) {
             List<World> out = new ArrayList<>();
             while (rs.next()) {
-                out.add(new World(rs.getString(1), rs.getShort(2), rs.getShort(3), rs.getLong(4)));
+                out.add(new World(rs.getString("name"), rs.getShort("server_id"), rs.getShort("dimension"), rs.getLong("seed")));
             }
             return out;
+        }
+    }
+
+    public static class PlayerSession {
+        public final int playerId;
+        public final long join;
+        public final long leave;
+
+        public PlayerSession(int playerId, long join, long leave) {
+            this.playerId = playerId;
+            this.join = join;
+            this.leave = leave;
+        }
+    }
+
+    public static List<PlayerSession> getAllSessionsOverlapping(Connection con, long start, long end) throws SQLException {
+        try (PreparedStatement statement = con.prepareStatement("SELECT player_id, enter, exit FROM player_sessions WHERE range && INT8RANGE(?, ?) ORDER BY enter")) {
+            statement.setLong(1, start);
+            statement.setLong(2, end);
+            try (ResultSet rs = statement.executeQuery()) {
+                List<PlayerSession> out = new ArrayList<>();
+                while (rs.next()) {
+                    out.add(new PlayerSession(rs.getInt("player_id"), rs.getLong("enter"), rs.getLong("exit")));
+                }
+                return out;
+            }
         }
     }
 }
