@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.OptionalLong;
+import java.util.concurrent.TimeUnit;
 
 public class Main {
     private static Thread eventProcessingThread;
@@ -91,7 +92,16 @@ public class Main {
     public static void main(String[] args) {
         new Database();
         //Database.backfillPlayerNameHistoryFromEvents();
-        while (Associator.doAssociate()) System.out.println("Associating");
+        new Thread(() -> {
+            try {
+                while (true) {
+                    while (Associator.doAssociate()) System.out.println("Associating");
+                    Thread.sleep(TimeUnit.HOURS.toMillis(1));
+                }
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+        }).start();
         eventProcessingThread = new Thread(() -> {
             while (true) {
                 final int limit = 1000;

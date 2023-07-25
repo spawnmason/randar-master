@@ -18,7 +18,7 @@ public class Associator {
     private static final long INTERVAL = TimeUnit.HOURS.toMillis(1);
     private static final long UNTIL = TimeUnit.HOURS.toMillis(24);
 
-    private static final long UNOCCUPIED_DURATION = TimeUnit.MINUTES.toMillis(10); // an area must have had no hits for 10 minutes beforehand for us to count it as a potential login
+    private static final long UNOCCUPIED_DURATION = TimeUnit.MINUTES.toMillis(60); // an area must have had no hits for 60 minutes beforehand for us to count it as a potential login
     private static final long INTERVAL_EXPANSION = UNOCCUPIED_DURATION + TimeUnit.MINUTES.toMillis(1);
 
 
@@ -83,7 +83,7 @@ public class Associator {
                 System.out.println("We are associated up till less than 1 day ago so, no");
                 return false;
             }
-            System.out.println(fence + " " + prevFence + " " + (fence - prevFence));
+            System.out.println(fence + " " + prevFence + " " + (fence - prevFence) + " " + (System.currentTimeMillis() - fence) / TimeUnit.DAYS.toMillis(1));
 
             List<Database.PlayerSession> relevantSessions = Database.getAllSessionsOverlapping(connection, prevFence - INTERVAL_EXPANSION, fence + INTERVAL_EXPANSION);
             System.out.println("Got " + relevantSessions.size() + " sessions");
@@ -125,13 +125,16 @@ public class Associator {
                         .mapToLong(other -> other.leave)
                         .map(leave -> leave + TimeUnit.SECONDS.toMillis(10)) // just in case theres server lag - allow 10 seconds of chunk loads after the leave
                         .max();
-                long cutoff = lastTimeThisPlayerLeftBeforeThisJoinEvent.orElse(event.join - UNOCCUPIED_DURATION); // otherwise it's the time they joined minutes ten minutes
+                long cutoff = event.join - UNOCCUPIED_DURATION; // otherwise it's the time they joined minutes sixty minutes
+                if (lastTimeThisPlayerLeftBeforeThisJoinEvent.isPresent()) {
+                    cutoff = Math.max(cutoff, lastTimeThisPlayerLeftBeforeThisJoinEvent.getAsLong()); // don't cutoff more than sixty minutes ever
+                }
 
                 // tldr: if there is any activity at a given location between cutoff and the join event, discard that location as a candidate
 
-                // find all rng hits within 1 second before to 5 seconds after
-                long rangeStart = event.join - 1000;
-                long rangeEnd = event.join + 5000;
+                // find all rng hits within 50ms before to 50ms after
+                long rangeStart = event.join - 50;
+                long rangeEnd = event.join + 50;
                 LongList candidateLocationsForThisJoin = new LongArrayList();
                 for (long hit : getRngHits(connection, rangeStart, rangeEnd)) {
                     int x = XFromLong(hit);
@@ -140,7 +143,8 @@ public class Associator {
                         cache.put(hit, new HitHistoryAtLocation(x, z, prevFence, fence, connection));
                     }
                     HitHistoryAtLocation history = cache.get(hit);
-                    if (history.timestamps.stream().anyMatch(timestamp -> timestamp >= cutoff && timestamp < rangeStart)) {
+                    final long finalCutoff = cutoff; // lambda capture
+                    if (history.timestamps.stream().anyMatch(timestamp -> timestamp >= finalCutoff && timestamp < rangeStart)) {
                         // this hit is not a candidate
                         continue;
                     }
