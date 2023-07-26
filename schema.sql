@@ -161,10 +161,12 @@ CREATE TABLE IF NOT EXISTS players
     uuid UUID NOT NULL UNIQUE
 );
 
+CREATE EXTENSION IF NOT EXISTS citext;
+
 CREATE TABLE IF NOT EXISTS name_history
 (
     player_id   INTEGER NOT NULL,
-    username    TEXT    NOT NULL,
+    username    CITEXT  NOT NULL,
     observed_at BIGINT  NOT NULL,
 
     FOREIGN KEY (player_id) REFERENCES players (id)

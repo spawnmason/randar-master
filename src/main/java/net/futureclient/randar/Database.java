@@ -183,8 +183,8 @@ public class Database {
     public static void addNewSeed(Connection con, EventSeed event, Object2IntMap<String> serverIdCache) throws SQLException {
         final short serverId = getServerId(con, event.server, serverIdCache);
 
-        for (long seed : event.seeds) {
-            try (PreparedStatement statement = con.prepareStatement("INSERT INTO rng_seeds_not_yet_processed VALUES(?, ?, ?, ?)")) {
+        try (PreparedStatement statement = con.prepareStatement("INSERT INTO rng_seeds_not_yet_processed VALUES(?, ?, ?, ?)")) {
+            for (long seed : event.seeds) {
                 statement.setShort(1, serverId);
                 statement.setLong(2, event.dimension);
                 statement.setLong(3, event.timestamp);
@@ -398,9 +398,9 @@ public class Database {
     public static class PlayerSession {
         public final int playerId;
         public final long join;
-        public final long leave;
+        public final OptionalLong leave;
 
-        public PlayerSession(int playerId, long join, long leave) {
+        public PlayerSession(int playerId, long join, OptionalLong leave) {
             this.playerId = playerId;
             this.join = join;
             this.leave = leave;
@@ -414,7 +414,9 @@ public class Database {
             try (ResultSet rs = statement.executeQuery()) {
                 List<PlayerSession> out = new ArrayList<>();
                 while (rs.next()) {
-                    out.add(new PlayerSession(rs.getInt("player_id"), rs.getLong("enter"), rs.getLong("exit")));
+                    long maybeExit = rs.getLong("exit");
+                    OptionalLong realExit = rs.wasNull() ? OptionalLong.empty() : OptionalLong.of(maybeExit);
+                    out.add(new PlayerSession(rs.getInt("player_id"), rs.getLong("enter"), realExit));
                 }
                 return out;
             }

@@ -14,12 +14,12 @@ import java.util.OptionalLong;
 import java.util.concurrent.TimeUnit;
 
 public class Associator {
-    // will do soon :)
     private static final long INTERVAL = TimeUnit.HOURS.toMillis(1);
-    private static final long UNTIL = TimeUnit.HOURS.toMillis(24);
+    private static final long MIN_DURATION = TimeUnit.MINUTES.toMillis(5);
 
     private static final long UNOCCUPIED_DURATION = TimeUnit.MINUTES.toMillis(60); // an area must have had no hits for 60 minutes beforehand for us to count it as a potential login
-    private static final long INTERVAL_EXPANSION = UNOCCUPIED_DURATION + TimeUnit.MINUTES.toMillis(1);
+    private static final long INTERVAL_EXPANSION_PRE = UNOCCUPIED_DURATION + TimeUnit.MINUTES.toMillis(1);
+    private static final long INTERVAL_EXPANSION_POST = TimeUnit.MINUTES.toMillis(1); // needs to lookahead 50ms and 10000ms, so round up
 
 
     // explain analyze with tmp as materialized (select count(*) from player_sessions where range && int8range(1685171344271-100000, 1685171344271+100000)) select * from tmp;
@@ -56,6 +56,22 @@ public class Associator {
         }
     }
 
+    public static long computeMostRecentPossibleFence(Connection con) throws SQLException {
+        // if something is processed into rng_seeds, we can assume that the events table is certainly processed up to that point
+        // in other words, if there is a rng_seeds entry at time X, then player_sessions is certainly accurate up through time X
+        try (PreparedStatement stmt = con.prepareStatement("SELECT MAX(received_at) AS max_timestamp_processed FROM rng_seeds WHERE server_id = 1 AND dimension = 0")) {
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    long mostRecentHit = rs.getLong("max_timestamp_processed");
+                    long mostRecentPossibleFence = mostRecentHit - INTERVAL_EXPANSION_POST;
+                    return mostRecentPossibleFence - TimeUnit.MINUTES.toMillis(1); // add another minute just to be safe
+                } else {
+                    return 0;
+                }
+            }
+        }
+    }
+
     public static boolean doAssociate() {
         try (Connection connection = Database.POOL.getConnection()) {
             connection.setAutoCommit(false);
@@ -78,14 +94,15 @@ public class Associator {
                     prevFence = rs.getLong("first_timestamp");
                 }
             }
-            long fence = prevFence + INTERVAL;
-            if (System.currentTimeMillis() - fence < UNTIL) {
-                System.out.println("We are associated up till less than 1 day ago so, no");
+            long fence = Math.min(prevFence + INTERVAL, computeMostRecentPossibleFence(connection));
+            long duration = fence - prevFence;
+            if (duration < MIN_DURATION) {
+                System.out.println("Associator duration would be " + duration + " " + (System.currentTimeMillis() - fence));
                 return false;
             }
             System.out.println(fence + " " + prevFence + " " + (fence - prevFence) + " " + (System.currentTimeMillis() - fence) / TimeUnit.DAYS.toMillis(1));
 
-            List<Database.PlayerSession> relevantSessions = Database.getAllSessionsOverlapping(connection, prevFence - INTERVAL_EXPANSION, fence + INTERVAL_EXPANSION);
+            List<Database.PlayerSession> relevantSessions = Database.getAllSessionsOverlapping(connection, prevFence - INTERVAL_EXPANSION_PRE, fence + INTERVAL_EXPANSION_POST);
             System.out.println("Got " + relevantSessions.size() + " sessions");
 
             List<Database.PlayerSession> candidateJoins = new ArrayList<>();
@@ -93,7 +110,7 @@ public class Associator {
             int nearbySkip = 0;
             for (int i = 0; i < relevantSessions.size(); i++) {
                 Database.PlayerSession session = relevantSessions.get(i);
-                if (session.join < prevFence || session.leave >= fence) {
+                if (session.join < prevFence || session.join >= fence) {
                     rangeSkip++;
                     continue;
                 }
@@ -121,8 +138,10 @@ public class Associator {
                 // decide the cutoff for previous activity
                 OptionalLong lastTimeThisPlayerLeftBeforeThisJoinEvent = relevantSessions
                         .stream()
-                        .filter(other -> other.playerId == event.playerId && other.leave < event.join)
-                        .mapToLong(other -> other.leave)
+                        .filter(other -> other.playerId == event.playerId)
+                        .filter(other -> other.leave.isPresent())
+                        .mapToLong(other -> other.leave.getAsLong())
+                        .filter(leave -> leave < event.join) // only consider times before this join
                         .map(leave -> leave + TimeUnit.SECONDS.toMillis(10)) // just in case theres server lag - allow 10 seconds of chunk loads after the leave
                         .max();
                 long cutoff = event.join - UNOCCUPIED_DURATION; // otherwise it's the time they joined minutes sixty minutes
