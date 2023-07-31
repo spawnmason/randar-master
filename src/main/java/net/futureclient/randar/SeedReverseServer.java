@@ -98,6 +98,17 @@ public class SeedReverseServer {
                 }
                 Database.saveProcessedSeeds(con, processed, result.timestamps, world.dimension, world.serverId);
                 System.out.println("saved all processed seeds to db");
+
+                List<Point> trackedPoints = Database.getTrackedPoints(con);
+                for (ProcessedSeed seed : processed) {
+                    for (Point point : trackedPoints) {
+                        if (point.pos == seed.pos) {
+                            // send discord
+                            //DiscordMeme.sendWebhook(point.title + " was loaded! Pos: " + point.pos);
+                        }
+                    }
+
+                }
             }
 
             con.commit();
@@ -127,8 +138,8 @@ public class SeedReverseServer {
 
     private static boolean verifySeeds(List<ProcessedSeed> processed, long worldSeed) {
         for (ProcessedSeed seed : processed) {
-            if (Woodland.stepRng(seed.steps, Woodland.woodlandMansionSeed(seed.x, seed.z, worldSeed) ^ 0x5DEECE66DL) != seed.rng_seed || seed.x < -WOODLAND_BOUNDS || seed.x > WOODLAND_BOUNDS || seed.z < -WOODLAND_BOUNDS || seed.z > WOODLAND_BOUNDS || seed.steps < 0 || seed.steps > 2750000) {
-                System.out.println("Bad RNG data! " + seed.rng_seed + " " + seed.steps + " " + seed.x + " " + seed.z);
+            if (Woodland.stepRng(seed.steps, Woodland.woodlandMansionSeed(seed.pos.x, seed.pos.z, worldSeed) ^ 0x5DEECE66DL) != seed.rng_seed || seed.pos.x < -WOODLAND_BOUNDS || seed.pos.x > WOODLAND_BOUNDS || seed.pos.z < -WOODLAND_BOUNDS || seed.pos.z > WOODLAND_BOUNDS || seed.steps < 0 || seed.steps > 2750000) {
+                System.out.println("Bad RNG data! " + seed.rng_seed + " " + seed.steps + " " + seed.pos.x + " " + seed.pos.z);
                 return false;
             }
         }

@@ -358,8 +358,8 @@ public class Database {
                 ProcessedSeed processed = seeds.get(i);
                 statement.setLong(4, processed.rng_seed);
                 statement.setInt(5, processed.steps);
-                statement.setInt(6, processed.x);
-                statement.setInt(7, processed.z);
+                statement.setInt(6, processed.pos.x);
+                statement.setInt(7, processed.pos.z);
 
                 statement.addBatch();
             }
@@ -368,17 +368,28 @@ public class Database {
         for (short timescale = 0; timescale < TIMESCALES.length; timescale++) {
             try (PreparedStatement statement = con.prepareStatement("INSERT INTO time_aggregated_seeds(server_id, dimension, timescale, time_idx, x, z, quantity) VALUES (?, ?, ?, ?, ?, ?, 1) ON CONFLICT (server_id, dimension, timescale, time_idx, x, z) DO UPDATE SET quantity = time_aggregated_seeds.quantity + 1")) {
                 for (int i = 0; i < seeds.size(); i++) {
-                    statement.setShort(1, (short) serverId);
-                    statement.setShort(2, (short) dimension);
+                    statement.setShort(1, serverId);
+                    statement.setShort(2, dimension);
                     statement.setShort(3, timescale);
                     statement.setInt(4, (int) (timestamps.getLong(i) / TIMESCALES[timescale]));
                     ProcessedSeed processed = seeds.get(i);
-                    statement.setInt(5, processed.x);
-                    statement.setInt(6, processed.z);
+                    statement.setInt(5, processed.pos.x);
+                    statement.setInt(6, processed.pos.z);
                     statement.addBatch();
                 }
                 statement.executeBatch();
             }
+        }
+    }
+
+    public static List<Point> getTrackedPoints(Connection con) throws SQLException {
+        try (PreparedStatement statement = con.prepareStatement("SELECT * FROM tracked_points");
+             ResultSet rs = statement.executeQuery()) {
+            List<Point> out = new ArrayList<>();
+            while (rs.next()) {
+                out.add(new Point(rs.getString("title"), rs.getShort("x"), rs.getShort("z")));
+            }
+            return out;
         }
     }
 
