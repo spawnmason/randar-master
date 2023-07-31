@@ -1,4 +1,4 @@
-package net.futureclient.randar;
+package net.futureclient.randar.util;
 
 import java.util.Objects;
 

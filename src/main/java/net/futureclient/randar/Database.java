@@ -7,6 +7,7 @@ import it.unimi.dsi.fastutil.longs.LongArrayList;
 import it.unimi.dsi.fastutil.objects.Object2IntMap;
 import it.unimi.dsi.fastutil.objects.Object2ObjectArrayMap;
 import net.futureclient.randar.events.*;
+import net.futureclient.randar.util.Point;
 import org.apache.commons.dbcp2.BasicDataSource;
 
 import java.sql.Connection;

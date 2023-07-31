@@ -1,5 +1,7 @@
 package net.futureclient.randar;
 
+import net.futureclient.randar.util.Vec2i;
+
 public class ProcessedSeed {
     public final long rng_seed;
     public final int steps;

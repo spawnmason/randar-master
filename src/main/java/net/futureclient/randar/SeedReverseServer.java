@@ -1,13 +1,18 @@
 package net.futureclient.randar;
 
 import it.unimi.dsi.fastutil.longs.LongArrayList;
+import net.futureclient.randar.util.DiscordWebhook;
+import net.futureclient.randar.util.Point;
 
+import java.awt.*;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.ArrayList;
@@ -22,12 +27,19 @@ public class SeedReverseServer {
     private final ServerSocket server;
     private final Thread listenThread;
     private final Executor socketIOExecutor;
+    private DiscordWebhook webhook;
 
     public SeedReverseServer() throws IOException {
         this.server = new ServerSocket(3460, 1, InetAddress.getByName("192.168.69.1"));
         this.socketIOExecutor = Executors.newSingleThreadExecutor();
         this.listenThread = new Thread(this::listen);
         System.out.println("nyanserver listening");
+
+        try {
+            this.webhook = new DiscordWebhook(new String(Files.readAllBytes(Path.of("./discord.txt"))));
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
     public void start() {
@@ -69,7 +81,8 @@ public class SeedReverseServer {
                 LongArrayList seeds = result.seeds;
                 System.out.println("nyanserver sending " + seeds.size() + " seeds");
                 out.writeInt(seeds.size());
-                if (seeds.isEmpty()) continue; // nothing needs to be done if there are no seeds (important for the client to match this behavior)
+                if (seeds.isEmpty())
+                    continue; // nothing needs to be done if there are no seeds (important for the client to match this behavior)
                 for (long seed : seeds) {
                     out.writeLong(seed);
                 }
@@ -99,15 +112,21 @@ public class SeedReverseServer {
                 Database.saveProcessedSeeds(con, processed, result.timestamps, world.dimension, world.serverId);
                 System.out.println("saved all processed seeds to db");
 
-                List<Point> trackedPoints = Database.getTrackedPoints(con);
-                for (ProcessedSeed seed : processed) {
-                    for (Point point : trackedPoints) {
-                        if (point.pos == seed.pos) {
-                            // send discord
-                            //DiscordMeme.sendWebhook(point.title + " was loaded! Pos: " + point.pos);
+                if (webhook != null) {
+                    List<Point> trackedPoints = Database.getTrackedPoints(con);
+                    for (ProcessedSeed seed : processed) {
+                        for (Point point : trackedPoints) {
+                            if (point.pos == seed.pos) {
+                                DiscordWebhook.EmbedObject embeds = new DiscordWebhook.EmbedObject();
+                                embeds.setTitle("Player detected");
+                                embeds.setDescription("Player detected at " + point.title + "!");
+                                embeds.setColor(Color.RED);
+
+                                webhook.addEmbed(embeds);
+                                webhook.execute();
+                            }
                         }
                     }
-
                 }
             }
 
@@ -122,7 +141,8 @@ public class SeedReverseServer {
         } finally {
             try {
                 s.close();
-            } catch (Throwable th) {}
+            } catch (Throwable th) {
+            }
         }
     }
 
