@@ -1,18 +1,23 @@
 package net.futureclient.randar;
 
 import it.unimi.dsi.fastutil.longs.LongArrayList;
+import net.futureclient.randar.util.DiscordWebhook;
+import net.futureclient.randar.util.Point;
+import net.futureclient.randar.util.Vec2i;
 
+import java.awt.*;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.SQLException;
-import java.util.ArrayList;
+import java.util.*;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 
@@ -22,12 +27,19 @@ public class SeedReverseServer {
     private final ServerSocket server;
     private final Thread listenThread;
     private final Executor socketIOExecutor;
+    private DiscordWebhook webhook;
 
     public SeedReverseServer() throws IOException {
         this.server = new ServerSocket(3460, 1, InetAddress.getByName("192.168.69.1"));
         this.socketIOExecutor = Executors.newSingleThreadExecutor();
         this.listenThread = new Thread(this::listen);
         System.out.println("nyanserver listening");
+
+        try {
+            this.webhook = new DiscordWebhook(new String(Files.readAllBytes(Path.of("./discord.txt"))));
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
     public void start() {
@@ -69,7 +81,8 @@ public class SeedReverseServer {
                 LongArrayList seeds = result.seeds;
                 System.out.println("nyanserver sending " + seeds.size() + " seeds");
                 out.writeInt(seeds.size());
-                if (seeds.isEmpty()) continue; // nothing needs to be done if there are no seeds (important for the client to match this behavior)
+                if (seeds.isEmpty())
+                    continue; // nothing needs to be done if there are no seeds (important for the client to match this behavior)
                 for (long seed : seeds) {
                     out.writeLong(seed);
                 }
@@ -98,6 +111,25 @@ public class SeedReverseServer {
                 }
                 Database.saveProcessedSeeds(con, processed, result.timestamps, world.dimension, world.serverId);
                 System.out.println("saved all processed seeds to db");
+
+                if (webhook != null) {
+                    List<Point> trackedPoints = Database.getTrackedPoints(con);
+                    Set<Vec2i> notifiedPositions = new HashSet<>();
+                    for (ProcessedSeed seed : processed) {
+                        for (Point point : trackedPoints) {
+                            if (point.pos == seed.pos && !notifiedPositions.contains(point.pos)) {
+                                DiscordWebhook.EmbedObject embeds = new DiscordWebhook.EmbedObject();
+                                embeds.setTitle("Player detected");
+                                embeds.setDescription("Player detected at " + point.title + "!\n Position: " + point.pos);
+                                embeds.setColor(Color.RED);
+
+                                webhook.addEmbed(embeds);
+                                webhook.execute();
+                                notifiedPositions.add(point.pos);
+                            }
+                        }
+                    }
+                }
             }
 
             con.commit();
@@ -111,7 +143,8 @@ public class SeedReverseServer {
         } finally {
             try {
                 s.close();
-            } catch (Throwable th) {}
+            } catch (Throwable th) {
+            }
         }
     }
 
@@ -127,8 +160,8 @@ public class SeedReverseServer {
 
     private static boolean verifySeeds(List<ProcessedSeed> processed, long worldSeed) {
         for (ProcessedSeed seed : processed) {
-            if (Woodland.stepRng(seed.steps, Woodland.woodlandMansionSeed(seed.x, seed.z, worldSeed) ^ 0x5DEECE66DL) != seed.rng_seed || seed.x < -WOODLAND_BOUNDS || seed.x > WOODLAND_BOUNDS || seed.z < -WOODLAND_BOUNDS || seed.z > WOODLAND_BOUNDS || seed.steps < 0 || seed.steps > 2750000) {
-                System.out.println("Bad RNG data! " + seed.rng_seed + " " + seed.steps + " " + seed.x + " " + seed.z);
+            if (Woodland.stepRng(seed.steps, Woodland.woodlandMansionSeed(seed.pos.x, seed.pos.z, worldSeed) ^ 0x5DEECE66DL) != seed.rng_seed || seed.pos.x < -WOODLAND_BOUNDS || seed.pos.x > WOODLAND_BOUNDS || seed.pos.z < -WOODLAND_BOUNDS || seed.pos.z > WOODLAND_BOUNDS || seed.steps < 0 || seed.steps > 2750000) {
+                System.out.println("Bad RNG data! " + seed.rng_seed + " " + seed.steps + " " + seed.pos.x + " " + seed.pos.z);
                 return false;
             }
         }

@@ -155,6 +155,13 @@ CREATE TABLE IF NOT EXISTS annotations
 );
 CREATE UNIQUE INDEX IF NOT EXISTS annotations_by_server_dimension_x_z_created_at ON annotations (server_id, dimension, x, z, created_at);
 
+CREATE TABLE IF NOT EXISTS tracked_points
+(
+    title      TEXT,
+    x          INTEGER  NOT NULL,
+    z          INTEGER  NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS players
 (
     id   SERIAL PRIMARY KEY,
