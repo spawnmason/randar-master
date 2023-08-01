@@ -120,7 +120,7 @@ public class SeedReverseServer {
                             if (point.pos == seed.pos && !notifiedPositions.contains(point.pos)) {
                                 DiscordWebhook.EmbedObject embeds = new DiscordWebhook.EmbedObject();
                                 embeds.setTitle("Player detected");
-                                embeds.setDescription("Player detected at " + point.title + "!");
+                                embeds.setDescription("Player detected at " + point.title + "!\n Position: " + point.pos);
                                 embeds.setColor(Color.RED);
 
                                 webhook.addEmbed(embeds);
