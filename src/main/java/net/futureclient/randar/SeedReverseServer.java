@@ -37,6 +37,8 @@ public class SeedReverseServer {
 
         try {
             this.webhook = new DiscordWebhook(new String(Files.readAllBytes(Path.of("./discord.txt"))));
+            this.webhook.setContent("hi uwu");
+            this.webhook.execute();
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -117,10 +119,12 @@ public class SeedReverseServer {
                     Set<Vec2i> notifiedPositions = new HashSet<>();
                     for (ProcessedSeed seed : processed) {
                         for (Point point : trackedPoints) {
-                            if (point.pos == seed.pos && !notifiedPositions.contains(point.pos)) {
+                            if (point.pos.equals(seed.pos) && !notifiedPositions.contains(point.pos)) {
                                 DiscordWebhook.EmbedObject embeds = new DiscordWebhook.EmbedObject();
                                 embeds.setTitle("Player detected");
-                                embeds.setDescription("Player detected at " + point.title + "!\n Position: " + point.pos);
+                                embeds.setDescription(
+                                        "Player detected at " + point.title + "!\n Position: " +
+                                                (point.pos.x * 1280 + 512) + ", " + (point.pos.z * 1280 + 512));
                                 embeds.setColor(Color.RED);
 
                                 webhook.addEmbed(embeds);
