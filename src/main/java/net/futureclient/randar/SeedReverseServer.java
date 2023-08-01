@@ -3,6 +3,7 @@ package net.futureclient.randar;
 import it.unimi.dsi.fastutil.longs.LongArrayList;
 import net.futureclient.randar.util.DiscordWebhook;
 import net.futureclient.randar.util.Point;
+import net.futureclient.randar.util.Vec2i;
 
 import java.awt.*;
 import java.io.DataInputStream;
@@ -15,9 +16,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.SQLException;
-import java.util.ArrayList;
+import java.util.*;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 
@@ -114,9 +114,10 @@ public class SeedReverseServer {
 
                 if (webhook != null) {
                     List<Point> trackedPoints = Database.getTrackedPoints(con);
+                    Set<Vec2i> notifiedPositions = new HashSet<>();
                     for (ProcessedSeed seed : processed) {
                         for (Point point : trackedPoints) {
-                            if (point.pos == seed.pos) {
+                            if (point.pos == seed.pos && !notifiedPositions.contains(point.pos)) {
                                 DiscordWebhook.EmbedObject embeds = new DiscordWebhook.EmbedObject();
                                 embeds.setTitle("Player detected");
                                 embeds.setDescription("Player detected at " + point.title + "!");
@@ -124,6 +125,7 @@ public class SeedReverseServer {
 
                                 webhook.addEmbed(embeds);
                                 webhook.execute();
+                                notifiedPositions.add(point.pos);
                             }
                         }
                     }
