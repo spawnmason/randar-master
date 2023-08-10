@@ -134,6 +134,7 @@ CREATE TABLE IF NOT EXISTS time_aggregated_seeds
     FOREIGN KEY (server_id) REFERENCES servers (id)
         ON UPDATE CASCADE ON DELETE CASCADE
 );
+CREATE INDEX IF NOT EXISTS time_aggregated_seeds_by_location ON time_aggregated_seeds(server_id, dimension, timescale, x, z, time_idx);
 
 CREATE TABLE IF NOT EXISTS annotations
 (
