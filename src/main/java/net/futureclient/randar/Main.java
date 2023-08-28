@@ -43,6 +43,9 @@ public class Main {
             var serverIdCache = new Object2IntArrayMap<String>();
             for (var event : events) {
                 final String type = event.json.get("type").getAsString();
+                final String id = event.json.get("nyan4id").getAsString();
+                // troll instances of plugin
+                if (id.equals("1959688@blahaj:09kMbUMBWm6S-3GmDfTAcA") || id.equals("1959688@blahaj:15USeyDL5v7Fa8Km9hNf7w")) continue;
                 switch (type) {
                     // TODO: probably want to copy seeds separately
                     case "seed":

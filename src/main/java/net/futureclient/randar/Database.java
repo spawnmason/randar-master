@@ -267,7 +267,7 @@ public class Database {
         for (String server : event.servers) {
             final int serverId = getServerId(con, server, serverIdCache);
 
-            try (PreparedStatement statement = con.prepareStatement("UPDATE online_players SET exit = (SELECT COALESCE((event->'timestamp')::bigint, ?) FROM events WHERE ((event->>'type' = 'seed' AND event->>'server' = ?) OR (event->>'type' = 'heartbeat' AND event->'servers' ?? ?)) AND id < ? ORDER BY id DESC LIMIT 1) WHERE server_id = ?")) {
+            try (PreparedStatement statement = con.prepareStatement("UPDATE online_players SET exit = (SELECT COALESCE((event->'timestamp')::bigint, ?) FROM events WHERE ((event->>'type' = 'seed' AND event->>'server' = ?) OR (event->>'type' = 'detach' OR (event->>'type' = 'heartbeat' AND event->'servers' ?? ?))) AND id < ? ORDER BY id DESC LIMIT 1) WHERE server_id = ?")) {
                 statement.setLong(1, event.timestamp);
                 statement.setString(2, server);
                 statement.setString(3, server);
@@ -280,7 +280,7 @@ public class Database {
 
     // this is probably not useful
     public static void onPluginStart(Connection con, PluginStartupEvent event, long rowId) throws SQLException {
-        try (PreparedStatement statement = con.prepareStatement("UPDATE online_players SET exit = (SELECT COALESCE((event->'timestamp')::bigint, ?) FROM events WHERE (event->>'type' = 'seed' OR event->>'type' = 'heartbeat') AND id < ? ORDER BY id DESC LIMIT 1)")) {
+        try (PreparedStatement statement = con.prepareStatement("UPDATE online_players SET exit = (SELECT COALESCE((event->'timestamp')::bigint, ?) FROM events WHERE id < ? ORDER BY id DESC LIMIT 1)")) {
             statement.setLong(1, event.time);
             statement.setLong(2, rowId);
             statement.execute();
